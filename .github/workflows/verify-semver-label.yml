@@ -1,0 +1,29 @@
+name: Verify Semver Label
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require exactly one release disposition label
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          count=$(printf '%s' "$LABELS" | jq '[.[] | select(. == "major" or . == "minor" or . == "patch" or . == "no-release")] | length')
+          if [ "$count" -eq 1 ]; then
+            exit 0
+          fi
+          echo "::error::Add exactly one of major, minor, patch, or no-release."
+          exit 1

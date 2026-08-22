@@ -1,0 +1,28 @@
+name: Markdown Verification
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - "**"
+    paths:
+      - "**/*.md"
+
+permissions:
+  contents: read
+
+jobs:
+  markdown-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Lint Markdown
+        uses: DavidAnson/markdownlint-cli2-action@v18
+        with:
+          globs: "**/*.md"
