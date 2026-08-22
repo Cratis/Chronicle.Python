@@ -11,6 +11,8 @@ on:
       - "**"
     paths:
       - "**/*.md"
+      - ".markdownlint.json"
+      - ".github/workflows/markdown-verification.yml"
 
 permissions:
   contents: read
