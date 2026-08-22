@@ -18,7 +18,7 @@ Chronicle kernel.
 
 1. Read [CONTRIBUTING.md](CONTRIBUTING.md).
 2. Follow the [client development guide](Documentation/client-development-guide.md).
-3. Pick an open issue with a bounded acceptance checklist.
+3. Start with [connection-string parsing](https://github.com/Cratis/Chronicle.Python/issues/2), the current good-first-issue contribution.
 4. Submit a pull request from a fork or branch.
 
 ## Development setup
