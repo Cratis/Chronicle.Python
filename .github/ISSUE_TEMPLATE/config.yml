@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Questions and design discussion
+    url: https://discord.gg/kt4AMpV8WV
+    about: Ask Chronicle client questions and discuss API direction before opening a broad proposal
   - name: Security report
     url: https://github.com/Cratis/Chronicle.Python/security/advisories/new
     about: Report suspected vulnerabilities privately
