@@ -25,7 +25,10 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+    # Temporary release asset until PyPI trusted publishing is configured.
+    "cratis-chronicle-contracts @ https://github.com/Cratis/Chronicle/releases/download/v16.38.2/cratis_chronicle_contracts-16.38.2-py3-none-any.whl#sha256=357052da8a62653dcfa40c8051c4af2c6a6d29295cb6783f59dd5efdf4bdc3f9",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -42,6 +45,9 @@ Homepage = "https://github.com/Cratis/Chronicle.Python"
 Documentation = "https://github.com/Cratis/Chronicle.Python/tree/main/Documentation"
 Repository = "https://github.com/Cratis/Chronicle.Python.git"
 Issues = "https://github.com/Cratis/Chronicle.Python/issues"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.version]
 source = "vcs"
