@@ -19,6 +19,15 @@ Chronicle C# contracts
       -> idiomatic Chronicle.Python API
 ```
 
+### Temporary contracts distribution
+
+Until PyPI trusted publishing is configured, the project dependency resolves the verified
+`cratis-chronicle-contracts` 16.38.2 wheel from its matching
+[Chronicle GitHub release](https://github.com/Cratis/Chronicle/releases/tag/v16.38.2). A normal development install
+fetches it automatically. Do not copy generated contracts into this repository. The dependency will move to the
+PyPI release after [the publisher setup](https://github.com/Cratis/Chronicle.Python/issues/15) and
+[first publication](https://github.com/Cratis/Chronicle.Python/issues/16) are complete.
+
 ## Local kernel
 
 The development kernel listens on `localhost:35000`. Its main listener uses TLS and serves gRPC over HTTP/2. A
