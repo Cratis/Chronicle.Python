@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local AI work artifacts (plans, handovers, session notes) — never tracked
+.ai-work/
