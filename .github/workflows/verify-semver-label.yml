@@ -1,5 +1,10 @@
 name: Verify Semver Label
 
+# Thin caller of the organization-wide release-intent gate. The policy - which
+# labels are accepted and what the errors say - lives in
+# Cratis/Workflows/.github/workflows/verify-release-intent.yml. Thirty diverging
+# per-repository copies of that logic are how the 2026-08-25 unintended releases
+# happened; do not reintroduce logic here.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -15,16 +20,4 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Require exactly one release disposition label
-        env:
-          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-        run: |
-          count=$(printf '%s' "$LABELS" | jq '[.[] | select(. == "major" or . == "minor" or . == "patch" or . == "no-release")] | length')
-          if [ "$count" -eq 1 ]; then
-            exit 0
-          fi
-          echo "::error::Add exactly one of major, minor, patch, or no-release."
-          exit 1
+    uses: Cratis/Workflows/.github/workflows/verify-release-intent.yml@main
