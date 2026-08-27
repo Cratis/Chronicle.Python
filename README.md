@@ -3,8 +3,12 @@
 [![Build](https://github.com/Cratis/Chronicle.Python/actions/workflows/build.yml/badge.svg)](https://github.com/Cratis/Chronicle.Python/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-This repository is the experimental Python client for [Cratis Chronicle](https://github.com/Cratis/Chronicle).
-It is being established as an idiomatic, async-first layer over Chronicle's generated gRPC contracts.
+This repository is the experimental Python client for [Cratis Chronicle](https://github.com/Cratis/Chronicle),
+the open-source (MIT) event-sourcing database and processing runtime — an event store for building event-sourced
+and CQRS applications. It is being established as an idiomatic, async-first layer over Chronicle's generated gRPC
+contracts. Python joins the existing [.NET](https://github.com/Cratis/Chronicle),
+[TypeScript](https://github.com/Cratis/Chronicle.TypeScript), [Kotlin/Java](https://github.com/Cratis/Chronicle.Kotlin),
+and [Elixir](https://github.com/Cratis/Chronicle.Elixir) Chronicle clients.
 
 > [!IMPORTANT]
 > The client is in its initial implementation stage. No package has been published, and no compatibility,
