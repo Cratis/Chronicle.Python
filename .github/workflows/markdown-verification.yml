@@ -28,4 +28,15 @@ jobs:
       - name: Lint Markdown
         uses: DavidAnson/markdownlint-cli2-action@v24
         with:
-          globs: "**/*.md"
+          globs: |
+            **/*.md
+            !.cratis/ai/**
+            !.agents/**
+            !.claude/**
+            !.cursor/**
+            !.opencode/**
+            !.pi/**
+            !.github/agents/**
+            !.github/instructions/**
+            !.github/prompts/**
+            !.github/skills/**
