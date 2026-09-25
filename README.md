@@ -11,8 +11,19 @@ contracts. Python joins the existing [.NET](https://github.com/Cratis/Chronicle)
 and [Elixir](https://github.com/Cratis/Chronicle.Elixir) Chronicle clients.
 
 > [!IMPORTANT]
-> The client is in its initial implementation stage. No package has been published, and no compatibility,
-> feature-parity, or support commitment is implied.
+> The client is in its initial implementation stage. It has no usable client API yet: the `cratis_chronicle`
+> package exposes only `__version__`. Nothing is published to PyPI, and no compatibility, feature-parity, or
+> support commitment is implied.
+
+## Current status
+
+| Area | Status |
+| --- | --- |
+| Client API (connect, authenticate, append) | Not implemented. Tracked by [the first authenticated append milestone](https://github.com/Cratis/Chronicle.Python/issues/4) |
+| `cratis-chronicle` on PyPI | Not published. Install from a source checkout |
+| Generated contracts (`cratis-chronicle-contracts`) | Not on PyPI. Installed automatically from a SHA-256-pinned wheel attached to the [Chronicle v16.38.2 release](https://github.com/Cratis/Chronicle/releases/tag/v16.38.2) |
+| Python versions | 3.10 or newer; CI runs 3.10, 3.11, 3.12, 3.13, and 3.14 |
+| Shared Chronicle documentation (language tabs) | Not integrated. Tracked by [Python examples in shared Chronicle documentation](https://github.com/Cratis/Chronicle.Python/issues/5) |
 
 ## Start contributing
 
@@ -27,16 +38,28 @@ Chronicle kernel.
 
 ## Development setup
 
-Python 3.10 or newer is required.
+Python 3.10 or newer is required. The install downloads the contracts wheel from `github.com`, so it needs network
+access to GitHub release assets as well as PyPI.
 
 ```shell
+git clone https://github.com/Cratis/Chronicle.Python.git
+cd Chronicle.Python
 python -m venv .venv
 source .venv/bin/activate        # Windows PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-Run the same checks as CI:
+Confirm that the package and its generated contracts import:
+
+```shell
+python -c "import cratis_chronicle, cratis_chronicle_contracts; print(cratis_chronicle.__version__)"
+```
+
+The command prints a development version derived from Git, such as `0.0.1.dev47+g…`. It prints `0.0.0` when the
+package metadata cannot be found, which usually means the editable install did not run in the active environment.
+
+Run the same checks as CI (the full list, with expected results, is in [CONTRIBUTING.md](CONTRIBUTING.md#required-checks)):
 
 ```shell
 ruff format --check .

@@ -13,6 +13,10 @@ Thank you for helping build the Python client for Chronicle.
 
 ## Local setup
 
+You need Python 3.10 or newer and Git. The install downloads the generated contracts wheel from a Chronicle GitHub
+release, so it needs network access to GitHub release assets. Docker is needed only for work that talks to a local
+Chronicle kernel; see the [client development guide](Documentation/client-development-guide.md#local-kernel).
+
 ```shell
 python -m venv .venv
 source .venv/bin/activate
@@ -33,6 +37,23 @@ rm -rf dist
 python -m build
 python -m twine check dist/*
 ```
+
+`rm -rf dist` clears distributions from earlier builds so that Twine checks only the current build. In Windows
+PowerShell, use `Remove-Item -Recurse -Force dist` instead.
+
+A passing run looks like this:
+
+| Check | Success signal |
+| --- | --- |
+| `ruff format --check .` | `… files already formatted` |
+| `ruff check .` | `All checks passed!` |
+| `mypy src` | `Success: no issues found` |
+| `pytest` | All tests pass, followed by a coverage report |
+| `python -m build` | `Successfully built` one `.tar.gz` and one `.whl` |
+| `python -m twine check dist/*` | `PASSED` for both files |
+
+CI runs these checks on Python 3.10 through 3.14. Pull requests that change Markdown also run markdownlint with
+the repository's `.markdownlint.json`.
 
 All checks must pass before review. New behavior requires tests, including failure behavior where applicable.
 
