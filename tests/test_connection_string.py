@@ -7,6 +7,8 @@ import pytest
 
 from cratis_chronicle import (
     DEFAULT_PORT,
+    DEVELOPMENT_CLIENT_ID,
+    DEVELOPMENT_CLIENT_SECRET,
     AmbiguousAuthenticationError,
     ChronicleConnectionOptions,
     ConnectionStringError,
@@ -38,6 +40,30 @@ def test_defaults_the_port_to_35000() -> None:
 
 def test_defaults_to_tls() -> None:
     assert parse_connection_string("chronicle://id:secret@localhost:35000").tls is True
+
+
+def test_exports_the_development_credentials() -> None:
+    assert (DEVELOPMENT_CLIENT_ID, DEVELOPMENT_CLIENT_SECRET) == ("chronicle-dev-client", "chronicle-dev-secret")
+
+
+@pytest.mark.parametrize("suffix", ["", "/", "/?apiKey=", "?apiKey=", "/?skipTlsValidation=true"])
+def test_a_connection_string_without_credentials_equals_the_one_with_the_development_credentials(suffix: str) -> None:
+    without_credentials = parse_connection_string(f"chronicle://localhost:35000{suffix}")
+    with_credentials = parse_connection_string(
+        f"chronicle://{DEVELOPMENT_CLIENT_ID}:{DEVELOPMENT_CLIENT_SECRET}@localhost:35000{suffix}"
+    )
+
+    assert without_credentials == with_credentials
+    assert (without_credentials.client_id, without_credentials.client_secret) == (
+        "chronicle-dev-client",
+        "chronicle-dev-secret",
+    )
+
+
+def test_a_connection_string_without_credentials_and_a_port_uses_the_default_port() -> None:
+    options = parse_connection_string("chronicle://localhost")
+
+    assert (options.host, options.port) == ("localhost", DEFAULT_PORT)
 
 
 def test_accepts_a_trailing_slash() -> None:
@@ -127,7 +153,9 @@ def test_str_shows_the_redacted_endpoint() -> None:
 def test_repr_shows_the_non_secret_fields() -> None:
     options = parse_connection_string("chronicle://id:secret@localhost:35001")
 
-    assert repr(options) == "ChronicleConnectionOptions(host='localhost', client_id='id', port=35001, tls=True)"
+    assert repr(options) == (
+        "ChronicleConnectionOptions(host='localhost', client_id='id', port=35001, tls=True, skip_tls_validation=True)"
+    )
 
 
 @pytest.mark.parametrize(
@@ -204,7 +232,6 @@ def test_accepts_the_port_range_limits(port: str) -> None:
 @pytest.mark.parametrize(
     "connection_string",
     [
-        "chronicle://localhost:35000",
         "chronicle://id@localhost",
         "chronicle://id:@localhost",
         "chronicle://:secret@localhost",
@@ -223,30 +250,104 @@ def test_rejects_credentials_that_are_not_valid_utf8(secret: str) -> None:
         parse_connection_string(f"chronicle://id:{secret}@localhost")
 
 
+def test_rejects_credentials_partial_with_an_api_key() -> None:
+    with pytest.raises(IncompleteCredentialsError):
+        parse_connection_string("chronicle://id@localhost?apiKey=abc")
+
+
 @pytest.mark.parametrize(
-    "query",
-    ["apiKey=abc", "apikey=abc", "auth=none", "auth=none&apiKey=abc", "skipTlsValidation=true&auth=none", "apiKey="],
+    "query", ["apiKey=abc", "apikey=abc", "APIKEY=abc", "auth=none&apiKey=abc", "skipTlsValidation=false&apiKey=abc"]
 )
-def test_rejects_ambiguous_authentication(query: str) -> None:
+def test_rejects_credentials_combined_with_an_api_key(query: str) -> None:
     with pytest.raises(AmbiguousAuthenticationError):
         parse_connection_string(f"chronicle://id:secret@localhost:35000/?{query}")
 
 
-def test_rejects_credentials_combined_with_an_authentication_option_without_a_slash() -> None:
+def test_rejects_credentials_combined_with_an_api_key_without_a_slash() -> None:
     with pytest.raises(AmbiguousAuthenticationError):
-        parse_connection_string("chronicle://id:secret@localhost?auth=none")
+        parse_connection_string("chronicle://id:secret@localhost?apiKey=abc")
+
+
+@pytest.mark.parametrize("query", ["apiKey=", "apiKey", "apikey="])
+def test_treats_an_empty_api_key_as_absent(query: str) -> None:
+    with_credentials = parse_connection_string(f"chronicle://id:secret@localhost/?{query}")
+    without_credentials = parse_connection_string(f"chronicle://localhost/?{query}")
+
+    assert with_credentials == parse_connection_string("chronicle://id:secret@localhost")
+    assert without_credentials == parse_connection_string("chronicle://localhost")
+
+
+@pytest.mark.parametrize("prefix", ["chronicle://localhost:35000", "chronicle://id:secret@localhost:35000"])
+@pytest.mark.parametrize("query", ["auth=none", "auth=NONE", "auth=apiKey", "auth=", "auth"])
+def test_reports_the_auth_option_as_unsupported(prefix: str, query: str) -> None:
+    with pytest.raises(UnsupportedOptionError):
+        parse_connection_string(f"{prefix}/?{query}")
+
+
+def test_does_not_support_an_api_key_without_credentials_yet() -> None:
+    with pytest.raises(UnsupportedOptionError):
+        parse_connection_string("chronicle://localhost:35000?apiKey=abc")
+
+
+def test_skips_tls_validation_by_default_while_tls_stays_on() -> None:
+    options = parse_connection_string("chronicle://id:secret@localhost:35000")
+
+    assert (options.tls, options.skip_tls_validation) == (True, True)
+
+
+@pytest.mark.parametrize(("value", "expected"), [("true", True), ("false", False), ("TRUE", True), ("False", False)])
+@pytest.mark.parametrize("prefix", ["chronicle://localhost:35000", "chronicle://id:secret@localhost:35000"])
+def test_parses_skip_tls_validation(prefix: str, value: str, expected: bool) -> None:
+    options = parse_connection_string(f"{prefix}/?skipTlsValidation={value}")
+
+    assert (options.tls, options.skip_tls_validation) == (True, expected)
+
+
+def test_parses_skip_tls_validation_case_insensitively_and_without_a_slash() -> None:
+    assert parse_connection_string("chronicle://localhost?SKIPTLSVALIDATION=false").skip_tls_validation is False
+
+
+def test_the_last_skip_tls_validation_wins() -> None:
+    options = parse_connection_string("chronicle://localhost?skipTlsValidation=false&skipTlsValidation=true")
+
+    assert options.skip_tls_validation is True
+
+
+@pytest.mark.parametrize("value", ["", "1", "0", "yes", "no", "tru", "true%20"])
+def test_rejects_a_skip_tls_validation_that_is_not_a_bool(value: str) -> None:
+    with pytest.raises(UnsupportedOptionError):
+        parse_connection_string(f"chronicle://localhost?skipTlsValidation={value}")
+
+
+def test_rejects_skip_tls_validation_without_a_value() -> None:
+    with pytest.raises(UnsupportedOptionError):
+        parse_connection_string("chronicle://localhost?skipTlsValidation")
+
+
+def test_combines_skip_tls_validation_with_an_empty_api_key() -> None:
+    options = parse_connection_string("chronicle://id:secret@localhost?apiKey=&skipTlsValidation=false")
+
+    assert options.skip_tls_validation is False
+
+
+def test_str_shows_when_certificate_validation_is_required() -> None:
+    options = parse_connection_string("chronicle://id:secret@localhost:35000?skipTlsValidation=false")
+
+    assert str(options) == "chronicle://id:****@localhost:35000/?skipTlsValidation=false"
+    assert parse_connection_string(str(options).replace("****", "secret")) == options
 
 
 @pytest.mark.parametrize(
     "suffix",
     [
-        "?skipTlsValidation=true",
         "?loadBalancer=round-robin",
         "?srvNameServer=10.0.0.53",
         "?skipCompatibilityCheck=true",
+        "?certificatePath=/tmp/cert.pfx",
         "?unknown",
         "?&",
         "/?unknown=1",
+        "/?skipTlsValidation=false&unknown=1",
         "/events",
         "/#fragment",
         "#",
@@ -255,12 +356,6 @@ def test_rejects_credentials_combined_with_an_authentication_option_without_a_sl
 def test_rejects_options_that_are_not_supported_yet(suffix: str) -> None:
     with pytest.raises(UnsupportedOptionError):
         parse_connection_string(f"chronicle://id:secret@localhost:35000{suffix}")
-
-
-@pytest.mark.parametrize("suffix", ["?apiKey=abc", "?auth=none"])
-def test_does_not_support_non_credential_authentication_yet(suffix: str) -> None:
-    with pytest.raises(UnsupportedOptionError):
-        parse_connection_string(f"chronicle://localhost:35000{suffix}")
 
 
 @pytest.mark.parametrize(
@@ -295,6 +390,7 @@ def test_every_error_is_a_connection_string_error_and_a_value_error() -> None:
         "chronicle://id:super-secret-value@",
         "chronicle://id:super-secret-value@localhost:0",
         "chronicle://id:super-secret-value@localhost?apiKey=abc",
+        "chronicle://id:super-secret-value@localhost?skipTlsValidation=maybe",
         "chronicle://id:super-secret-value@local host",
         "chronicle://id:super%FFsecret-value@localhost",
     ],

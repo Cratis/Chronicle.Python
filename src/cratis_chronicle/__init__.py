@@ -7,6 +7,8 @@ from importlib.metadata import PackageNotFoundError, version
 
 from .connection_string import (
     DEFAULT_PORT,
+    DEVELOPMENT_CLIENT_ID,
+    DEVELOPMENT_CLIENT_SECRET,
     AmbiguousAuthenticationError,
     ChronicleConnectionOptions,
     ConnectionStringError,
@@ -28,6 +30,8 @@ except PackageNotFoundError:
 
 __all__ = [
     "DEFAULT_PORT",
+    "DEVELOPMENT_CLIENT_ID",
+    "DEVELOPMENT_CLIENT_SECRET",
     "AmbiguousAuthenticationError",
     "ChronicleConnectionOptions",
     "ConnectionStringError",
