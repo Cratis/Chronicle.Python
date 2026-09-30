@@ -5,9 +5,40 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
+from .connection_string import (
+    DEFAULT_PORT,
+    AmbiguousAuthenticationError,
+    ChronicleConnectionOptions,
+    ConnectionStringError,
+    IncompleteCredentialsError,
+    InvalidCredentialsEncodingError,
+    InvalidHostError,
+    InvalidPortError,
+    MalformedConnectionStringError,
+    MissingHostError,
+    UnsupportedOptionError,
+    UnsupportedSchemeError,
+    parse_connection_string,
+)
+
 try:
     __version__ = version("cratis-chronicle")
 except PackageNotFoundError:
     __version__ = "0.0.0"
 
-__all__ = ["__version__"]
+__all__ = [
+    "DEFAULT_PORT",
+    "AmbiguousAuthenticationError",
+    "ChronicleConnectionOptions",
+    "ConnectionStringError",
+    "IncompleteCredentialsError",
+    "InvalidCredentialsEncodingError",
+    "InvalidHostError",
+    "InvalidPortError",
+    "MalformedConnectionStringError",
+    "MissingHostError",
+    "UnsupportedOptionError",
+    "UnsupportedSchemeError",
+    "__version__",
+    "parse_connection_string",
+]
