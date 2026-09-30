@@ -174,8 +174,10 @@ def parse_connection_string(connection_string: str) -> ChronicleConnectionOption
     if parts.fragment or connection_string.endswith("#"):
         raise UnsupportedOptionError("A fragment is not supported")
 
-    client_id, client_secret = _parse_credentials(user_info, has_user_info=bool(has_user_info))
-    skip_tls_validation = _parse_query(parts.query, has_credentials=bool(has_user_info))
+    # Empty user info ("@host" or ":@host") carries no credentials, exactly like no user info in the .NET client.
+    has_credentials = bool(has_user_info) and user_info not in ("", ":")
+    client_id, client_secret = _parse_credentials(user_info, has_user_info=has_credentials)
+    skip_tls_validation = _parse_query(parts.query, has_credentials=has_credentials)
     return ChronicleConnectionOptions(
         host=host,
         client_id=client_id,
@@ -234,6 +236,11 @@ def _parse_query(query: str, *, has_credentials: bool) -> bool:
     if not pairs:
         raise UnsupportedOptionError("An empty query string is not supported")
 
+    # 'auth' is reported as unsupported before any ambiguity check, because in the .NET client
+    # 'auth=none' wins over every other authentication option.
+    if any(name == _AUTH for name, _ in pairs):
+        raise UnsupportedOptionError("The 'auth' option is not supported yet")
+
     # An empty apiKey is absent, exactly like in the .NET client.
     if has_credentials and any(name == _API_KEY and value for name, value in pairs):
         raise AmbiguousAuthenticationError(
@@ -263,6 +270,10 @@ def _parse_credentials(user_info: str, *, has_user_info: bool) -> tuple[str, str
     raw_client_id, separator, raw_client_secret = user_info.partition(":")
     if not separator or not raw_client_id or not raw_client_secret:
         raise IncompleteCredentialsError("Both a client id and a client secret are required")
+    if ":" in raw_client_secret:
+        # The .NET client keeps only the text before a second ':', so an unencoded ':' would send a
+        # different secret from each client. Require it to be percent-encoded instead.
+        raise IncompleteCredentialsError("Encode ':' in the client secret as %3A")
 
     try:
         return unquote(raw_client_id, errors="strict"), unquote(raw_client_secret, errors="strict")

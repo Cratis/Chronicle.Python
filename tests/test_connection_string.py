@@ -104,7 +104,7 @@ def test_parses_an_ipv4_host() -> None:
         ("chronicle://id:sp%20ace@localhost", "id", "sp ace"),
         ("chronicle://id:caf%C3%A9@localhost", "id", "café"),
         ("chronicle://id:a+b@localhost", "id", "a+b"),
-        ("chronicle://id:se:cret@localhost", "id", "se:cret"),
+        ("chronicle://id:se%3Acret@localhost", "id", "se:cret"),
     ],
 )
 def test_preserves_percent_encoded_credentials(connection_string: str, client_id: str, client_secret: str) -> None:
@@ -235,8 +235,7 @@ def test_accepts_the_port_range_limits(port: str) -> None:
         "chronicle://id@localhost",
         "chronicle://id:@localhost",
         "chronicle://:secret@localhost",
-        "chronicle://:@localhost",
-        "chronicle://@localhost",
+        "chronicle://id:se:cret@localhost",
     ],
 )
 def test_rejects_incomplete_credentials(connection_string: str) -> None:
@@ -255,9 +254,7 @@ def test_rejects_credentials_partial_with_an_api_key() -> None:
         parse_connection_string("chronicle://id@localhost?apiKey=abc")
 
 
-@pytest.mark.parametrize(
-    "query", ["apiKey=abc", "apikey=abc", "APIKEY=abc", "auth=none&apiKey=abc", "skipTlsValidation=false&apiKey=abc"]
-)
+@pytest.mark.parametrize("query", ["apiKey=abc", "apikey=abc", "APIKEY=abc", "skipTlsValidation=false&apiKey=abc"])
 def test_rejects_credentials_combined_with_an_api_key(query: str) -> None:
     with pytest.raises(AmbiguousAuthenticationError):
         parse_connection_string(f"chronicle://id:secret@localhost:35000/?{query}")
@@ -401,3 +398,13 @@ def test_error_messages_never_expose_the_secret(connection_string: str) -> None:
 
     assert "super" not in str(caught.value)
     assert "secret-value" not in str(caught.value)
+
+
+@pytest.mark.parametrize("connection_string", ["chronicle://@localhost:35000", "chronicle://:@localhost:35000"])
+def test_treats_empty_user_info_as_no_credentials(connection_string: str) -> None:
+    assert parse_connection_string(connection_string) == parse_connection_string("chronicle://localhost:35000")
+
+
+def test_reports_auth_as_unsupported_before_checking_for_ambiguity() -> None:
+    with pytest.raises(UnsupportedOptionError):
+        parse_connection_string("chronicle://id:secret@localhost?auth=none&apiKey=abc")

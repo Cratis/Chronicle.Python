@@ -38,6 +38,9 @@ options. The values are exported as `DEVELOPMENT_CLIENT_ID` and `DEVELOPMENT_CLI
 development values and only work against a kernel explicitly configured to accept them.
 
 A partial set of credentials is an error: `id@host`, `id:@host` and `:secret@host` raise `IncompleteCredentialsError`.
+Empty user info (`@host` or `:@host`) carries no credentials and uses the development defaults, as in the .NET client.
+Percent-encode a `:` in the client secret as `%3A`; an unencoded one raises `IncompleteCredentialsError`, because the
+.NET client would keep only the text before it.
 
 ## TLS certificate validation
 
