@@ -1,0 +1,23 @@
+# Copyright (c) Cratis. All rights reserved.
+# Licensed under the MIT license. See LICENSE file in the project root for full license information.
+name: Verify Release Notes
+
+# Installed through a reviewed change: the organization bootstrap ignores this repository.
+# Read current labels and description; edited/labeled/unlabeled events refresh the gate.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  release-notes:
+    uses: Cratis/Workflows/.github/workflows/verify-release-notes.yml@main
+    with:
+      runs-on: ${{ vars.RUNNER_GATE || 'ubuntu-latest' }}
