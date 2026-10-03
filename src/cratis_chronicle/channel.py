@@ -9,8 +9,9 @@ import grpc
 from grpc import aio
 
 from .connection_string import ChronicleConnectionOptions
+from .errors import InsecureTransportError
 from .http_transport import StreamFormTransport, TokenTransport
-from .tls import resolve_tls_trust
+from .tls import is_loopback_host, resolve_tls_trust
 from .token_provider import OAuthTokenProvider
 
 __all__ = ["BearerTokenInterceptor", "ChronicleChannel"]
@@ -61,6 +62,10 @@ class ChronicleChannel:
         token_transport: TokenTransport | None = None,
     ) -> ChronicleChannel:
         """Create the channel for ``options``. Nothing is sent until the first call; the first call fetches a token."""
+        if not options.tls and not is_loopback_host(options.host):
+            raise InsecureTransportError(
+                "Client credentials and access tokens are not sent without TLS to a host other than localhost"
+            )
         trust = await resolve_tls_trust(options, ca_certificates=ca_certificates)
         transport = token_transport or StreamFormTransport(trust.ssl_context() if trust else None)
         provider = OAuthTokenProvider(options, transport)

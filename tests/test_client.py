@@ -184,3 +184,11 @@ def test_connect_accepts_a_connection_string() -> None:
         await client.aclose()
 
     asyncio.run(run())
+
+
+def test_credentials_are_not_sent_without_tls_to_a_remote_host() -> None:
+    from cratis_chronicle import ChronicleChannel, ChronicleConnectionOptions, InsecureTransportError
+
+    options = ChronicleConnectionOptions(host="kernel.example.com", client_id="id", client_secret="secret", tls=False)
+    with pytest.raises(InsecureTransportError):
+        asyncio.run(ChronicleChannel.open(options))

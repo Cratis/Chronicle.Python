@@ -79,16 +79,23 @@ class StreamFormTransport:
         try:
             writer.write(payload)
             await writer.drain()
-            raw = await reader.read(_MAX_RESPONSE_BYTES + 1)
-            if len(raw) > _MAX_RESPONSE_BYTES:
-                raise ValueError("response too large")
-            return _parse_response(raw)
+            return _parse_response(await _read_to_end(reader))
         finally:
             writer.close()
             try:
                 await writer.wait_closed()
             except (OSError, ssl.SSLError):
                 pass
+
+
+async def _read_to_end(reader: asyncio.StreamReader) -> bytes:
+    """Read until the server closes the connection (the request said ``Connection: close``), within the size bound."""
+    raw = bytearray()
+    while chunk := await reader.read(65536):
+        raw += chunk
+        if len(raw) > _MAX_RESPONSE_BYTES:
+            raise ValueError("response too large")
+    return bytes(raw)
 
 
 def _parse_response(raw: bytes) -> HttpResponse:
@@ -105,6 +112,13 @@ def _parse_response(raw: bytes) -> HttpResponse:
         headers[name.strip().lower()] = value.strip().lower()
     if "chunked" in headers.get("transfer-encoding", ""):
         body = _decode_chunked(body)
+    elif "content-length" in headers:
+        length = headers["content-length"]
+        if not length.isascii() or not length.isdigit():
+            raise ValueError("invalid content length")
+        if len(body) < int(length):
+            raise ValueError("truncated body")
+        body = body[: int(length)]
     return HttpResponse(status=int(status_parts[1]), body=body)
 
 

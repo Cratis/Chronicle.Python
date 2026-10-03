@@ -9,6 +9,7 @@ __all__ = [
     "AppendFailedError",
     "ChronicleError",
     "CommandFailedError",
+    "InsecureTransportError",
     "TokenAuthorizationError",
     "TokenError",
     "TokenRequestError",
@@ -38,6 +39,10 @@ class AppendFailedError(ChronicleError):
     def __init__(self, reasons: list[str]) -> None:
         self.reasons = reasons
         super().__init__(f"The event was not appended: {'; '.join(reasons) if reasons else 'no reason given'}")
+
+
+class InsecureTransportError(ChronicleError):
+    """The options would send the client secret or an access token over an unencrypted connection to a remote host."""
 
 
 class TokenError(ChronicleError):

@@ -217,3 +217,37 @@ def test_trusting_one_certificate_still_verifies_the_host_name(self_signed: tupl
 
     with pytest.raises(TokenRequestError):
         asyncio.run(scenario())
+
+
+def test_reads_a_response_that_arrives_in_several_segments() -> None:
+    async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        await read_request(reader)
+        writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 7\r\n\r\n")
+        await writer.drain()
+        await asyncio.sleep(0.05)
+        writer.write(b'{"a":1}')
+        await writer.drain()
+        writer.close()
+
+    async def scenario() -> bytes:
+        server, port = await serve(handler)
+        async with server:
+            return (await StreamFormTransport(None).post_form(f"http://127.0.0.1:{port}/x", {})).body
+
+    assert asyncio.run(scenario()) == b'{"a":1}'
+
+
+def test_a_body_shorter_than_its_content_length_is_rejected() -> None:
+    async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        await read_request(reader)
+        writer.write(b'HTTP/1.1 200 OK\r\nContent-Length: 50\r\n\r\n{"access_tok')
+        await writer.drain()
+        writer.close()
+
+    async def scenario() -> None:
+        server, port = await serve(handler)
+        async with server:
+            await StreamFormTransport(None).post_form(f"http://127.0.0.1:{port}/x", {})
+
+    with pytest.raises(TokenRequestError):
+        asyncio.run(scenario())
