@@ -277,5 +277,9 @@ def _parse_credentials(user_info: str, *, has_user_info: bool) -> tuple[str, str
 
     try:
         return unquote(raw_client_id, errors="strict"), unquote(raw_client_secret, errors="strict")
-    except UnicodeDecodeError as error:
-        raise InvalidCredentialsEncodingError("The credentials are not valid percent-encoded UTF-8") from error
+    except UnicodeDecodeError:
+        pass
+
+    # Raised outside the handler so neither __cause__ nor __context__ carries the decoder's message, which names the
+    # offending byte of the credentials.
+    raise InvalidCredentialsEncodingError("The credentials are not valid percent-encoded UTF-8")

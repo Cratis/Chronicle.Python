@@ -408,3 +408,11 @@ def test_treats_empty_user_info_as_no_credentials(connection_string: str) -> Non
 def test_reports_auth_as_unsupported_before_checking_for_ambiguity() -> None:
     with pytest.raises(UnsupportedOptionError):
         parse_connection_string("chronicle://id:secret@localhost?auth=none&apiKey=abc")
+
+
+def test_invalid_credential_encoding_error_carries_no_decoder_cause_or_context() -> None:
+    with pytest.raises(InvalidCredentialsEncodingError) as caught:
+        parse_connection_string("chronicle://id:super%FFsecret@localhost")
+
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
