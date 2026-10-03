@@ -12,8 +12,8 @@ and [Elixir](https://github.com/Cratis/Chronicle.Elixir) Chronicle clients.
 
 > [!IMPORTANT]
 > The client is in its initial implementation stage. It has no usable client API yet: the `cratis_chronicle`
-> package exposes only `__version__`. Nothing is published to PyPI, and no compatibility, feature-parity, or
-> support commitment is implied.
+> package exposes `__version__` and a connection-string parser that opens no connection. Nothing is published to
+> PyPI, and no compatibility, feature-parity, or support commitment is implied.
 
 ## Current status
 
@@ -33,7 +33,7 @@ Chronicle kernel.
 
 1. Read [CONTRIBUTING.md](CONTRIBUTING.md).
 2. Follow the [client development guide](Documentation/client-development-guide.md).
-3. Start with [connection-string parsing](https://github.com/Cratis/Chronicle.Python/issues/2), the current good-first-issue contribution.
+3. Start with [async OAuth token handling](https://github.com/Cratis/Chronicle.Python/issues/3), the next step after connection-string parsing.
 4. Submit a pull request from a fork or branch.
 
 ## Development setup
