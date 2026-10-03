@@ -85,7 +85,8 @@ call as metadata:
 authorization: Bearer <access token>
 ```
 
-Token acquisition, caching, expiry, refresh, and call interception should remain separate from the channel. Do
+Token acquisition, caching, expiry, refresh, and call interception are separate from the channel
+(`token_provider.py`, `channel.py`). Do
 not permanently bake one expiring token into channel headers. Chronicle's
 [authentication and bearer tokens](https://www.cratis.io/chronicle/building-a-client/authentication-and-bearer-tokens/)
 page describes the behavior the other clients implement: the three authentication modes selected by the connection
@@ -100,10 +101,9 @@ validation.
 
 Chronicle's .NET client differs: it accepts any server certificate unless validation is turned on; see
 [TLS configuration](https://www.cratis.io/chronicle/configuration/tls/). This guide does not adopt that default.
-How the Python client exposes local-development relaxation (an explicit option, a `skipTlsValidation`
-connection-string parameter, or both) is a public API decision for
-[connection-string parsing](https://github.com/Cratis/Chronicle.Python/issues/2). Do not decide it implicitly in
-an implementation, and do not make relaxed validation the behavior for non-local connections. The connection-string grammar, including `skipTlsValidation`, `apiKey`, and `auth=none`, is in
+The Python client reads that decision from the connection string: `skipTlsValidation` is honored only for
+loopback hosts, where it trusts the certificate the kernel presents, and is ignored for every other host; see
+[Authentication and TLS](authentication-and-tls.md). The connection-string grammar, including `skipTlsValidation`, `apiKey`, and `auth=none`, is in
 [connection string elements](https://www.cratis.io/chronicle/building-a-client/connection-string-elements/).
 
 ### Check the kernel before writing client code
@@ -179,7 +179,29 @@ with token: CommandResult
 
 The probe creates an event store named `python-probe` in the development kernel. Stopping the container removes it.
 
-## First executable milestone
+## Verify against a real kernel
+
+The unit tests run an in-process fake kernel. The opt-in integration tests need a development kernel you start
+yourself. Use a private port so they cannot collide with other kernels:
+
+```shell
+docker run -d --name chronicle-python-it -p 127.0.0.1:19300:35000 cratis/chronicle:16.38.2-development
+# wait until the log says "ready and listening on port 35000"
+CHRONICLE_INTEGRATION_URL=chronicle://localhost:19300 pytest tests/test_integration.py --no-cov
+docker rm -f chronicle-python-it
+```
+
+The tests authenticate over TLS, ensure an event store and the `Default` namespace, register an event type, append
+two events and assert consecutive sequence numbers. They also assert that wrong credentials fail with
+`TokenAuthorizationError` without leaking the secret, and that `skipTlsValidation=false` rejects the self-signed
+certificate. Without `CHRONICLE_INTEGRATION_URL` they are skipped. The kernel also keeps its data in the container,
+so removing it cleans up.
+
+Newer kernels renamed contracts: against `cratis/chronicle:19.31.2-development`, ensuring an event store and a
+namespace works, but `EventTypes.Register` returns `UNIMPLEMENTED`. Moving to newer contracts needs a contracts
+package generated from that release.
+
+## First executable milestone (implemented)
 
 Implement and verify this order before expanding the API:
 
@@ -247,8 +269,8 @@ uncertainty against the core contracts and kernel behavior.
 
 ## Next steps
 
-- Pick up [async OAuth token handling](https://github.com/Cratis/Chronicle.Python/issues/3); connection-string
-  parsing is described in [Connection strings](connection-strings.md).
+- Read [Getting started](getting-started.md), [Authentication and TLS](authentication-and-tls.md) and
+  [Connection strings](connection-strings.md).
 - Read Chronicle's [Building a Chronicle client](https://www.cratis.io/chronicle/building-a-client/) guide for
   the cross-client contract.
 - Follow [CONTRIBUTING.md](../CONTRIBUTING.md) for the required checks before opening a pull request.
