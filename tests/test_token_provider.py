@@ -2,7 +2,9 @@
 # Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 import asyncio
+import gc
 import json
+import warnings
 from collections.abc import Mapping
 from typing import Any
 
@@ -276,3 +278,83 @@ def test_the_access_token_never_appears_in_repr_or_response_errors() -> None:
 
     assert "super-token" not in repr(tokens)
     assert "super-token" not in str(tokens)
+
+
+def test_invalidating_during_a_refresh_does_not_cache_the_stale_token() -> None:
+    transport = FakeTransport(ok("stale", expires_in=3600), ok("fresh", expires_in=3600))
+    tokens = provider(transport)
+
+    async def scenario() -> list[str]:
+        transport.gate = asyncio.Event()
+        in_flight = asyncio.ensure_future(tokens.get_token())
+        await asyncio.sleep(0.01)
+        tokens.invalidate()
+        transport.gate.set()
+        waiter = await in_flight
+        transport.gate = None
+        return [waiter, await tokens.get_token(), await tokens.get_token()]
+
+    assert asyncio.run(scenario()) == ["stale", "fresh", "fresh"]
+    assert len(transport.calls) == 2
+
+
+def test_a_caller_after_invalidation_does_not_join_the_stale_refresh() -> None:
+    transport = FakeTransport(ok("stale", expires_in=3600), ok("fresh", expires_in=3600))
+    tokens = provider(transport)
+
+    async def scenario() -> str:
+        transport.gate = asyncio.Event()
+        stale = asyncio.ensure_future(tokens.get_token())
+        await asyncio.sleep(0.01)
+        tokens.invalidate()
+        later = asyncio.ensure_future(tokens.get_token())
+        await asyncio.sleep(0.01)
+        transport.gate.set()
+        await stale
+        return await later
+
+    assert asyncio.run(scenario()) == "fresh"
+
+
+def test_a_failed_shared_refresh_whose_waiters_all_cancelled_leaves_no_unretrieved_exception() -> None:
+    transport = FakeTransport(TokenRequestError("unreachable"))
+    tokens = provider(transport)
+    unhandled: list[dict[str, Any]] = []
+
+    async def scenario() -> None:
+        asyncio.get_running_loop().set_exception_handler(lambda _, context: unhandled.append(context))
+        transport.gate = asyncio.Event()
+        first = asyncio.ensure_future(tokens.get_token())
+        second = asyncio.ensure_future(tokens.get_token())
+        await asyncio.sleep(0.01)
+        first.cancel()
+        second.cancel()
+        await asyncio.gather(first, second, return_exceptions=True)
+        transport.gate.set()
+        await asyncio.sleep(0.01)
+        gc.collect()
+        await asyncio.sleep(0)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        asyncio.run(scenario())
+        gc.collect()
+
+    assert unhandled == []
+    assert len(transport.calls) == 1
+
+
+def test_closing_after_invalidation_still_cancels_the_detached_refresh() -> None:
+    transport = FakeTransport(ok(expires_in=3600))
+    tokens = provider(transport)
+
+    async def scenario() -> None:
+        transport.gate = asyncio.Event()
+        caller = asyncio.ensure_future(tokens.get_token())
+        await asyncio.sleep(0.01)
+        tokens.invalidate()
+        await tokens.aclose()
+        with pytest.raises(asyncio.CancelledError):
+            await caller
+
+    asyncio.run(scenario())

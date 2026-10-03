@@ -56,6 +56,8 @@ class OAuthTokenProvider:
         self._clock = clock
         self._token: _CachedToken | None = None
         self._refresh: asyncio.Task[_CachedToken] | None = None
+        self._generation = 0
+        self._in_flight: set[asyncio.Task[_CachedToken]] = set()
         self._closed = False
 
     def __repr__(self) -> str:
@@ -75,31 +77,49 @@ class OAuthTokenProvider:
         if cached is not None and self._clock() < cached.refresh_at:
             return cached.value
         if self._refresh is None or self._refresh.done():
-            self._refresh = asyncio.ensure_future(self._request_token())
-        # Shielded: cancelling this caller must not cancel the request other callers are waiting on.
-        return (await asyncio.shield(self._refresh)).value
+            self._refresh = asyncio.ensure_future(self._request_token(self._generation))
+            self._in_flight.add(self._refresh)
+            self._refresh.add_done_callback(self._settled)
+        # Waiting through asyncio.wait, not awaiting the task: cancelling this caller must not cancel the request other
+        # callers share, and unlike asyncio.shield it leaves no wrapper future to report an unretrieved failure.
+        refresh = self._refresh
+        await asyncio.wait({refresh})
+        return refresh.result().value
 
     def invalidate(self) -> None:
-        """Forget the cached token so the next call requests a new one."""
+        """Forget the cached token so the next call requests a new one.
+
+        A request already in flight keeps serving the callers that are waiting on it, but its token is not cached and
+        later callers do not join it: it was issued before the token was declared invalid.
+        """
+        self._generation += 1
         self._token = None
+        self._refresh = None
 
     async def aclose(self) -> None:
         """Cancel any in-flight request and refuse further use. Safe to call more than once."""
         self._closed = True
         self._token = None
-        refresh, self._refresh = self._refresh, None
-        if refresh is not None and not refresh.done():
+        self._refresh = None
+        pending = list(self._in_flight)
+        for refresh in pending:
             refresh.cancel()
-        if refresh is not None:
-            await asyncio.gather(refresh, return_exceptions=True)
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
-    async def _request_token(self) -> _CachedToken:
+    def _settled(self, task: asyncio.Task[_CachedToken]) -> None:
+        """Forget a finished refresh and retrieve its outcome, so a failure nobody waits for is not left unretrieved."""
+        self._in_flight.discard(task)
+        if not task.cancelled():
+            task.exception()
+
+    async def _request_token(self, generation: int) -> _CachedToken:
         response = await self._transport.post_form(
             self._url,
             {"grant_type": "client_credentials", "client_id": self._client_id, "client_secret": self._client_secret},
         )
         token = self._interpret(response)
-        if not self._closed:
+        if not self._closed and generation == self._generation:
             self._token = token
         return token
 
