@@ -1,4 +1,7 @@
-# Event source and stream definitions (partial)
+---
+title: Event source and stream definitions
+description: Define registered event sources and streams and resolve append routing and concurrency (partial parity).
+---
 
 `cratis_chronicle.event_sources` provides the transport-independent part of registered event source parity
 (Chronicle 19.30.0, Cratis/Chronicle#4516): definitions, validation, and append routing/concurrency resolution.
