@@ -22,6 +22,17 @@ from .connection_string import (
     UnsupportedSchemeError,
     parse_connection_string,
 )
+from .errors import (
+    ChronicleError,
+    CommandFailedError,
+    TokenAuthorizationError,
+    TokenError,
+    TokenRequestError,
+    TokenResponseError,
+)
+from .http_transport import HttpResponse, StreamFormTransport, TokenTransport
+from .tls import TlsTrust, is_loopback_host, resolve_tls_trust
+from .token_provider import DEFAULT_TOKEN_LIFETIME_SECONDS, OAuthTokenProvider
 
 try:
     __version__ = version("cratis-chronicle")
@@ -29,6 +40,20 @@ except PackageNotFoundError:
     __version__ = "0.0.0"
 
 __all__ = [
+    "DEFAULT_TOKEN_LIFETIME_SECONDS",
+    "ChronicleError",
+    "CommandFailedError",
+    "HttpResponse",
+    "OAuthTokenProvider",
+    "StreamFormTransport",
+    "TlsTrust",
+    "TokenAuthorizationError",
+    "TokenError",
+    "TokenRequestError",
+    "TokenResponseError",
+    "TokenTransport",
+    "is_loopback_host",
+    "resolve_tls_trust",
     "DEFAULT_PORT",
     "DEVELOPMENT_CLIENT_ID",
     "DEVELOPMENT_CLIENT_SECRET",
