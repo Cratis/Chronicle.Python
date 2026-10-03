@@ -9,13 +9,20 @@ Routing belongs to the append, not to event types.
 
 ```python
 from cratis_chronicle.event_sources import (
-    ConcurrencyDimensions, EventSourceDefinition, EventStreamDefinition, resolve_routing,
+    ConcurrencyDimensions,
+    EventSourceDefinition,
+    EventStreamDefinition,
+    resolve_routing,
 )
 
 account = EventSourceDefinition(
     "Account",
     concurrency=ConcurrencyDimensions.EVENT_SOURCE_ID,
-    streams=(EventStreamDefinition("Transactions", concurrency=ConcurrencyDimensions.EVENT_SOURCE_ID | ConcurrencyDimensions.EVENT_STREAM_ID),),
+    streams=(
+        EventStreamDefinition(
+            "Transactions", concurrency=ConcurrencyDimensions.EVENT_SOURCE_ID | ConcurrencyDimensions.EVENT_STREAM_ID
+        ),
+    ),
 )
 routing = resolve_routing({account.name: account}, "Account", "Transactions")
 ```
