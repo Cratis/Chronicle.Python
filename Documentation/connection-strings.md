@@ -44,10 +44,13 @@ Percent-encode a `:` in the client secret as `%3A`; an unencoded one raises `Inc
 
 ## TLS certificate validation
 
-`skipTlsValidation` is a boolean that defaults to `true`, as in the .NET client: the connection always uses TLS, but the
-kernel certificate is accepted without validation so a development kernel with a self-signed certificate works.
-Pass `skipTlsValidation=false` to require a verifiable certificate. `true` and `false` are accepted; any other value
-raises `UnsupportedOptionError`. The result is `options.skip_tls_validation`; `options.tls` stays `True` either way.
+`skipTlsValidation` is a boolean that defaults to `true`, as in the .NET client. The connection always uses TLS. The
+client honors the option only for `localhost` and loopback addresses, where it trusts the certificate the local
+kernel presents so a development kernel with a self-signed certificate works. For any other host the certificate must
+chain to a trusted root whatever the option says. Pass `skipTlsValidation=false` to require a verifiable certificate
+everywhere. `true` and `false` are accepted; any other value raises `UnsupportedOptionError`. The result is
+`options.skip_tls_validation`; `options.tls` stays `True` either way. See
+[Authentication and TLS](authentication-and-tls.md).
 
 ```python
 parse_connection_string("chronicle://localhost:35000/?skipTlsValidation=false").skip_tls_validation  # False

@@ -1,7 +1,18 @@
 # Samples
 
-Runnable samples will be added with the client milestones they exercise. A sample must use the released or local
-client package, contain no credentials beyond documented local-development defaults, and run in CI before it is
-presented as working.
+A sample uses the local client package, contains no credentials beyond the documented local-development defaults, and
+is run against a development kernel before it is presented as working.
 
-The first planned sample will authenticate to a local Chronicle development kernel and append one event.
+## append_event
+
+[`append_event/main.py`](append_event/main.py) authenticates to a local development kernel, ensures an event store and
+the `Default` namespace, registers an event type with a JSON schema and appends one event.
+
+```shell
+docker run -d --name chronicle-python-sample -p 127.0.0.1:35000:35000 cratis/chronicle:19.31.3-development
+python Samples/append_event/main.py                          # chronicle://localhost:35000
+python Samples/append_event/main.py chronicle://localhost:19300   # another port
+docker rm -f chronicle-python-sample
+```
+
+It prints `Appended event with sequence number <n>`.
