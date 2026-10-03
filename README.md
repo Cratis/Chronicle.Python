@@ -20,9 +20,9 @@ and [Elixir](https://github.com/Cratis/Chronicle.Elixir) Chronicle clients.
 
 | Area | Status |
 | --- | --- |
-| Client API (connect, authenticate, append) | Experimental and minimal: OAuth, event store and namespace, event type registration, append to `event-log`. Verified against the 16.38.2 development kernel. See [Getting started](Documentation/getting-started.md) |
+| Client API (connect, authenticate, append) | Experimental and minimal: OAuth, event store and namespace, event type registration, append to `event-log`. Verified against the 19.31.3 development kernel. See [Getting started](Documentation/getting-started.md) |
 | `cratis-chronicle` on PyPI | Not published. Install from a source checkout |
-| Generated contracts (`cratis-chronicle-contracts`) | Not on PyPI. Installed automatically from a SHA-256-pinned wheel attached to the [Chronicle v16.38.2 release](https://github.com/Cratis/Chronicle/releases/tag/v16.38.2) |
+| Generated contracts (`cratis-chronicle-contracts`) | Not on PyPI. Installed automatically from a SHA-256-pinned wheel attached to the [Chronicle v19.31.3 release](https://github.com/Cratis/Chronicle/releases/tag/v19.31.3) |
 | Python versions | 3.10 or newer; CI runs 3.10, 3.11, 3.12, 3.13, and 3.14 |
 | Shared Chronicle documentation (language tabs) | Not integrated. Tracked by [Python examples in shared Chronicle documentation](https://github.com/Cratis/Chronicle.Python/issues/5) |
 

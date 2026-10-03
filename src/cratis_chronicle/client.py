@@ -10,15 +10,14 @@ import uuid
 from collections.abc import Iterable
 from typing import Any
 
-from cratis_chronicle_contracts.events_pb2 import EventType as RegistrationEventType
-from cratis_chronicle_contracts.events_pb2 import EventTypeRegistration, RegisterEventTypesRequest
-from cratis_chronicle_contracts.events_pb2_grpc import EventTypesStub
+from cratis_chronicle_contracts import sequences_pb2 as sequence_messages
 from cratis_chronicle_contracts.eventstores_pb2 import EnsureEventStoreRequest
 from cratis_chronicle_contracts.eventstores_pb2_grpc import EventStoresStub
 from cratis_chronicle_contracts.namespaces_pb2 import EnsureNamespaceRequest
 from cratis_chronicle_contracts.namespaces_pb2_grpc import NamespacesStub
+from cratis_chronicle_contracts.sequences_pb2_grpc import EventSequencesStub
 
-from . import _eventsequence_contracts as sequence_contracts
+from . import _event_type_contracts as event_type_contracts
 from .channel import ChronicleChannel
 from .connection_string import ChronicleConnectionOptions, parse_connection_string
 from .errors import AppendFailedError, CommandFailedError
@@ -74,26 +73,28 @@ class EventSequence:
         if not event_source_id.strip():
             raise ValueError("An event source id must not be empty")
         correlation_id = uuid.uuid4()
-        timestamp = sequence_contracts.messages.SerializableDateTimeOffset(
+        timestamp = sequence_messages.SerializableDateTimeOffset(
             Value=to_wire_timestamp(occurred or datetime.datetime.now(datetime.timezone.utc))
         )
-        request = sequence_contracts.messages.AppendRequest(
+        request = sequence_messages.AppendRequest(
             EventStore=self._event_store,
             Namespace=self._namespace,
             EventSequenceId=self._sequence_id,
             CorrelationId=to_wire_guid(correlation_id),
             EventSourceId=event_source_id,
-            EventType=sequence_contracts.messages.EventType(Id=event_type.id, Generation=event_type.generation),
+            EventType=sequence_messages.EventType(Id=event_type.id, Generation=event_type.generation),
             Content=serialize_content(content),
             # The kernel dereferences the causation chain, so an empty chain fails the call; record who appended.
-            Causation=[sequence_contracts.messages.Causation(Occurred=timestamp, Type=CAUSATION_TYPE)],
-            CausedBy=sequence_contracts.messages.Identity(Subject=IDENTITY, Name=IDENTITY, UserName=IDENTITY),
+            Causation=[sequence_messages.Causation(Occurred=timestamp, Type=CAUSATION_TYPE)],
+            CausedBy=sequence_messages.Identity(Subject=IDENTITY, Name=IDENTITY, UserName=IDENTITY),
             Occurred=timestamp,
         )
         # An unset scope makes the kernel dereference null, and sequence number 0 would demand an empty sequence.
         # The unavailable sequence number is the value the kernel does not validate.
         request.ConcurrencyScope.SequenceNumber = UNAVAILABLE_SEQUENCE_NUMBER
-        response = await self._stub.Append(request)
+        result = await self._stub.Append(request)
+        _ensure_command_succeeded("Appending an event", result)
+        response = result.Response
         reasons = list(response.Errors)
         reasons += [f"constraint violation: {violation.Message}" for violation in response.ConstraintViolations]
         if response.HasField("ConcurrencyViolation"):
@@ -110,9 +111,7 @@ class Namespace:
 
     def __init__(self, channel: ChronicleChannel, event_store: str, name: str) -> None:
         self.name = name
-        self._event_log = EventSequence(
-            sequence_contracts.services.EventSequencesStub(channel.channel), event_store, name, EVENT_LOG
-        )
+        self._event_log = EventSequence(EventSequencesStub(channel.channel), event_store, name, EVENT_LOG)
 
     @property
     def event_log(self) -> EventSequence:
@@ -137,16 +136,18 @@ class EventStore:
 
     async def register_event_types(self, definitions: Iterable[EventTypeDefinition]) -> None:
         """Register event types with their schemas in this event store."""
+        messages = event_type_contracts.messages
         registrations = [
-            EventTypeRegistration(
-                Type=RegistrationEventType(Id=definition.id, Generation=definition.generation),
+            messages.EventTypeRegistration(
+                Type=messages.EventType(Id=definition.id, Generation=definition.generation),
                 Schema=definition.schema_json(),
             )
             for definition in definitions
         ]
-        await EventTypesStub(self._channel.channel).Register(
-            RegisterEventTypesRequest(EventStore=self.name, Types=registrations)
+        result = await event_type_contracts.services.EventTypesStub(self._channel.channel).RegisterEventTypes(
+            messages.RegisterEventTypesRequest(EventStore=self.name, Types=registrations)
         )
+        _ensure_command_succeeded("Registering event types", result)
 
     async def register_event_type(self, definition: EventTypeDefinition) -> None:
         """Register one event type with its schema in this event store."""

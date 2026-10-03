@@ -9,7 +9,7 @@ is run against a development kernel before it is presented as working.
 the `Default` namespace, registers an event type with a JSON schema and appends one event.
 
 ```shell
-docker run -d --name chronicle-python-sample -p 127.0.0.1:35000:35000 cratis/chronicle:16.38.2-development
+docker run -d --name chronicle-python-sample -p 127.0.0.1:35000:35000 cratis/chronicle:19.31.3-development
 python Samples/append_event/main.py                          # chronicle://localhost:35000
 python Samples/append_event/main.py chronicle://localhost:19300   # another port
 docker rm -f chronicle-python-sample

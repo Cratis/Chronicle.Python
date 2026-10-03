@@ -59,7 +59,12 @@ def test_establishes_state_in_order_registers_a_schema_and_appends_to_the_event_
     kernel = FakeKernel()
     source, result = with_kernel(scenario, kernel=kernel)
 
-    assert kernel.calls == ["EnsureEventStore:books", "EnsureNamespace:books/Default", "Register:books", "Append"]
+    assert kernel.calls == [
+        "EnsureEventStore:books",
+        "EnsureNamespace:books/Default",
+        "RegisterEventTypes:books",
+        "Append",
+    ]
     registration = kernel.registered[0]
     assert (registration.Type.Id, registration.Type.Generation) == ("book-added", 1)
     assert '"properties"' in registration.Schema
@@ -192,3 +197,12 @@ def test_credentials_are_not_sent_without_tls_to_a_remote_host() -> None:
     options = ChronicleConnectionOptions(host="kernel.example.com", client_id="id", client_secret="secret", tls=False)
     with pytest.raises(InsecureTransportError):
         asyncio.run(ChronicleChannel.open(options))
+
+
+def test_a_failed_event_type_registration_is_reported_instead_of_ignored() -> None:
+    async def scenario(_: FakeKernel, client: ChronicleClient, __: FakeTokenTransport) -> None:
+        store = await client.ensure_event_store("books")
+        await store.register_event_type(BOOK_ADDED)
+
+    with pytest.raises(CommandFailedError, match="schema rejected"):
+        with_kernel(scenario, kernel=FakeKernel(register_failure="schema rejected"))

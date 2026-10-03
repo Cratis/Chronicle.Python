@@ -12,18 +12,18 @@ from typing import Any
 
 import grpc
 from cratis_chronicle_contracts import (
-    events_pb2,
-    events_pb2_grpc,
     eventstores_pb2,
     eventstores_pb2_grpc,
+    eventtypes_pb2,
+    eventtypes_pb2_grpc,
     namespaces_pb2,
     namespaces_pb2_grpc,
+    sequences_pb2,
+    sequences_pb2_grpc,
 )
-from google.protobuf.empty_pb2 import Empty
 from grpc import aio
 
 from cratis_chronicle import HttpResponse
-from cratis_chronicle import _eventsequence_contracts as sequences
 
 
 @dataclass
@@ -34,6 +34,7 @@ class FakeKernel:
     registered: list[Any] = field(default_factory=list)
     append_errors: list[str] = field(default_factory=list)
     namespace_failure: str | None = None
+    register_failure: str | None = None
     next_sequence_number: int = 42
     port: int = 0
     _server: aio.Server | None = None
@@ -58,26 +59,30 @@ class FakeKernel:
                     result.ExceptionMessages.append(kernel.namespace_failure)
                 return result
 
-        class EventTypes(events_pb2_grpc.EventTypesServicer):
-            async def Register(self, request: Any, context: aio.ServicerContext) -> Any:
-                kernel.record(f"Register:{request.EventStore}", context)
+        class EventTypes(eventtypes_pb2_grpc.EventTypesServicer):
+            async def RegisterEventTypes(self, request: Any, context: aio.ServicerContext) -> Any:
+                kernel.record(f"RegisterEventTypes:{request.EventStore}", context)
                 kernel.registered.extend(request.Types)
-                return Empty()
+                result = eventtypes_pb2.CommandResult()
+                if kernel.register_failure:
+                    result.ExceptionMessages.append(kernel.register_failure)
+                return result
 
-        class EventSequences(sequences.services.EventSequencesServicer):
+        class EventSequences(sequences_pb2_grpc.EventSequencesServicer):
             async def Append(self, request: Any, context: aio.ServicerContext) -> Any:
                 kernel.record("Append", context)
                 kernel.appended.append(request)
-                response = sequences.messages.AppendResponse(SequenceNumber=kernel.next_sequence_number)
-                response.CorrelationId.CopyFrom(request.CorrelationId)
-                response.Errors.extend(kernel.append_errors)
-                return response
+                result = sequences_pb2.CommandResult_AppendResponse()
+                result.Response.SequenceNumber = kernel.next_sequence_number
+                result.Response.CorrelationId.CopyFrom(request.CorrelationId)
+                result.Response.Errors.extend(kernel.append_errors)
+                return result
 
         server = aio.server()
         eventstores_pb2_grpc.add_EventStoresServicer_to_server(EventStores(), server)
         namespaces_pb2_grpc.add_NamespacesServicer_to_server(Namespaces(), server)
-        events_pb2_grpc.add_EventTypesServicer_to_server(EventTypes(), server)
-        sequences.services.add_EventSequencesServicer_to_server(EventSequences(), server)
+        eventtypes_pb2_grpc.add_EventTypesServicer_to_server(EventTypes(), server)
+        sequences_pb2_grpc.add_EventSequencesServicer_to_server(EventSequences(), server)
         self.port = server.add_insecure_port("127.0.0.1:0")
         self._server = server
         await server.start()
@@ -108,4 +113,4 @@ class FakeTokenTransport:
         return HttpResponse(200, json.dumps(body).encode())
 
 
-__all__ = ["FakeKernel", "FakeTokenTransport", "grpc", "events_pb2"]
+__all__ = ["FakeKernel", "FakeTokenTransport", "grpc"]

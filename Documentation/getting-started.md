@@ -22,18 +22,18 @@ python -m pip install -e ".[dev]"
 
 ## Start a development kernel
 
-The contracts in this client are generated from Chronicle 16.38.2, so use the matching kernel image. The development
+The contracts in this client are generated from Chronicle 19.31.3, so use the matching kernel image. The development
 image generates a self-signed certificate, accepts the built-in development credentials and keeps events inside the
 container.
 
 ```shell
-docker run --rm -p 127.0.0.1:35000:35000 cratis/chronicle:16.38.2-development
+docker run --rm -p 127.0.0.1:35000:35000 cratis/chronicle:19.31.3-development
 ```
 
-:::caution[Newer kernels are not supported yet]
-Against `cratis/chronicle:19.31.2-development`, ensuring an event store and a namespace works but registering an
-event type fails with `UNIMPLEMENTED`, because the kernel renamed that gRPC contract. Use the 16.38.2 kernel until the
-client moves to contracts generated from a newer release.
+:::caution[Older kernels are not supported]
+The client calls the 19.x gRPC contracts. Against a 16.x kernel, such as `cratis/chronicle:16.38.2-development`,
+ensuring an event store and a namespace works but registering an event type fails with `UNIMPLEMENTED`, because the
+kernel renamed that contract. Use a 19.31.3 or compatible kernel.
 :::
 
 ## Append an event
@@ -97,7 +97,7 @@ All of them derive from `ChronicleError`. No message contains the client secret 
 | You want to… | Status |
 | --- | --- |
 | `pip install cratis-chronicle` from PyPI | Not possible. No package is published |
-| Authenticate, ensure state, register an event type and append | Supported against a 16.38.2 development kernel |
+| Authenticate, ensure state, register an event type and append | Supported against a 19.31.3 development kernel |
 | Read events, observe, project or react | Not implemented |
 | Reconnect or discover a kernel automatically | Not implemented |
 | Use Chronicle from another language now | Use the [.NET](https://github.com/Cratis/Chronicle), [TypeScript](https://github.com/Cratis/Chronicle.TypeScript), [Kotlin/Java](https://github.com/Cratis/Chronicle.Kotlin), or [Elixir](https://github.com/Cratis/Chronicle.Elixir) client |
