@@ -33,6 +33,7 @@ jobs:
       - name: Upload distributions
         uses: actions/upload-artifact@v7
         with:
+          retention-days: 1
           name: python-package-distributions
           path: dist/
           if-no-files-found: error
