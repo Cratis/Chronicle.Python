@@ -671,6 +671,55 @@ def test_preserves_percent_encoded_unassigned_or_newly_assigned_format_character
     assert str(options)
 
 
+@pytest.mark.parametrize(
+    ("unicode_host", "ascii_host"),
+    [
+        ("münchen.example", "xn--mnchen-3ya.example"),
+        ("例え.テスト", "xn--r8jz45g.xn--zckzah"),
+        ("bücher.example", "xn--bcher-kva.example"),
+    ],
+)
+@pytest.mark.parametrize("host_form", ["unicode", "punycode"])
+@pytest.mark.parametrize("trailing_dot", ["", "."])
+def test_accepts_idn_hosts_and_preserves_the_supplied_representation(
+    unicode_host: str, ascii_host: str, host_form: str, trailing_dot: str
+) -> None:
+    host = (unicode_host if host_form == "unicode" else ascii_host) + trailing_dot
+    options = parse_connection_string(f"chronicle://id:secret@{host}")
+
+    assert options.host == host
+    assert options.host.encode("idna").decode("ascii") == ascii_host + trailing_dot
+    assert str(options) == f"chronicle://id:****@{host}:35000"
+
+
+@pytest.mark.parametrize("host", ["PRIVATE_HOST\ud800.example", "é" * 58 + ".example"])
+def test_idna_conversion_failures_raise_a_chain_free_host_error(host: str) -> None:
+    connection_string = f"chronicle://PRIVATE_CLIENT:PRIVATE_SECRET@{host}"
+    with pytest.raises(InvalidHostError) as caught:
+        parse_connection_string(connection_string)
+
+    assert str(caught.value) == "The host is not a valid internationalised host name"
+    for rendering in (str(caught.value), repr(caught.value), "".join(traceback.format_exception(caught.value))):
+        assert "PRIVATE_HOST" not in rendering
+        assert "PRIVATE_CLIENT" not in rendering
+        assert "PRIVATE_SECRET" not in rendering
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize("trailing_dot", ["", "."])
+def test_accepts_unicode_hosts_at_the_encoded_dns_length_limits(trailing_dot: str) -> None:
+    host = ".".join(["é" * 57] * 3 + ["a" * 61]) + trailing_dot
+    assert parse_connection_string(f"chronicle://id:secret@{host}").host == host
+
+
+@pytest.mark.parametrize("trailing_dot", ["", "."])
+def test_rejects_unicode_hosts_beyond_the_encoded_total_dns_length_limit(trailing_dot: str) -> None:
+    host = ".".join(["é" * 57] * 3 + ["a" * 62]) + trailing_dot
+    with pytest.raises(InvalidHostError):
+        parse_connection_string(f"chronicle://id:secret@{host}")
+
+
 def test_an_invalid_ipv6_host_error_does_not_retain_the_input_in_its_chain() -> None:
     secret = "super-secret"
     with pytest.raises(InvalidHostError) as caught:

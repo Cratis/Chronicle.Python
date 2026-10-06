@@ -26,11 +26,16 @@ chronicle://[<client-id>:<client-secret>@]<host>[:<port>][/][?skipTlsValidation=
 - The port defaults to `35000`.
 - The client id and client secret are percent-decoded and must be valid UTF-8, without lone Unicode surrogates.
   Encode reserved characters such as `@`, `:`, `/`, `?`, `#`, `[`, `]` and `%` in them. Raw Unicode whitespace,
-  control and format characters are rejected; explicitly percent-encoded credential characters are preserved.
-- Host names have non-empty labels of 1–63 characters, starting and ending with a letter or digit. The total name
-  length is at most 253 characters, ignoring an optional trailing dot, which is preserved.
+  control, format and unassigned characters are rejected; explicitly percent-encoded credential characters are
+  preserved. Rejecting unassigned characters also rejects newly assigned format characters on older Python versions.
+- Internationalised host names are accepted as Unicode (`münchen.example`, `例え.テスト`) or ASCII punycode
+  (`xn--mnchen-3ya.example`, `xn--r8jz45g.xn--zckzah`). The supplied representation is preserved, as in the .NET client.
+  Host names are validated using their IDNA-encoded ASCII form: non-empty labels of 1–63 characters, starting and
+  ending with a letter or digit, and at most 253 characters in total, ignoring an optional trailing dot, which is
+  preserved.
 - An IPv6 host must be enclosed in brackets, for example `chronicle://id:secret@[::1]:35000`. For a scoped address,
-  both `[fe80::1%eth0]` and `[fe80::1%25eth0]` produce the host `fe80::1%eth0`.
+  both `[fe80::1%eth0]` and `[fe80::1%25eth0]` produce the host `fe80::1%eth0`. The zone id must be non-empty and contain
+  only ASCII letters, digits or `._~-`.
 - Direct kernel connections default to TLS (`options.tls` is `True`).
 - Option names are case-insensitive.
 
@@ -70,13 +75,13 @@ Every rejection is a subclass of `ConnectionStringError` (itself a `ValueError`)
 | --- | --- |
 | A scheme other than `chronicle://`, including `chronicle+srv://` | `UnsupportedSchemeError` |
 | No host | `MissingHostError` |
-| An invalid host, empty or over-long host name labels, a host name over 253 characters, invalid or misplaced brackets, or more than one host | `InvalidHostError` |
+| An invalid host or IDNA encoding, empty or over-long encoded host name labels, an encoded host name over 253 characters, invalid IPv6 zone ids, invalid or misplaced brackets, or more than one host | `InvalidHostError` |
 | A port that is not an integer from 1 to 65535 | `InvalidPortError` |
 | Only one of the client id and client secret, or an empty one | `IncompleteCredentialsError` |
 | Credentials containing invalid percent-encoded UTF-8 or lone Unicode surrogates | `InvalidCredentialsEncodingError` |
 | Client credentials combined with a non-empty `apiKey` | `AmbiguousAuthenticationError` |
 | A non-empty `apiKey` without credentials, any `auth=...`, a `skipTlsValidation` that is not `true` or `false`, any other query parameter, a path other than `/`, or a fragment | `UnsupportedOptionError` |
-| Raw Unicode whitespace, control or format characters (categories `Cc`, `Cf`, `Zs`, `Zl`, `Zp`) | `MalformedConnectionStringError` |
+| Raw Unicode whitespace, control, format or unassigned characters (categories `Cc`, `Cf`, `Cn`, `Zs`, `Zl`, `Zp`) | `MalformedConnectionStringError` |
 
 Malformed bracketed hosts and unescaped brackets in the authority always raise `InvalidHostError` on every
 supported Python version. Other structurally invalid URLs raise `MalformedConnectionStringError`. Parser errors

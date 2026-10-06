@@ -244,6 +244,8 @@ def _parse_host_and_port(host_and_port: str) -> tuple[str, int]:
         if not host:
             raise MissingHostError("The connection string does not name a host")
         host_name = host.removesuffix(".")
+        if not host_name.isascii():
+            host_name = _encode_idn_host(host_name)
         if len(host_name) > 253:
             raise InvalidHostError("The host name must not exceed 253 characters")
         labels = host_name.split(".")
@@ -253,6 +255,18 @@ def _parse_host_and_port(host_and_port: str) -> tuple[str, int]:
             raise InvalidHostError("The host contains characters that are not valid in a host name")
 
     return host, _parse_port(port_text)
+
+
+def _encode_idn_host(host: str) -> str:
+    """Validate Unicode DNS names through IDNA without changing the returned host representation."""
+    try:
+        ascii_host = host.encode("idna").decode("ascii")
+    except UnicodeError:
+        ascii_host = None
+    if ascii_host is None:
+        # The codec exception can contain the input host; do not retain it in cause or context.
+        raise InvalidHostError("The host is not a valid internationalised host name")
+    return ascii_host
 
 
 def _parse_port(port_text: str | None) -> int:
