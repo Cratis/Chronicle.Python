@@ -259,8 +259,12 @@ def _parse_host_and_port(host_and_port: str) -> tuple[str, int]:
 
 def _encode_idn_host(host: str) -> str:
     """Validate Unicode DNS names through IDNA without changing the returned host representation."""
+    ascii_host: str | None
     try:
-        ascii_host = host.encode("idna").decode("ascii")
+        ascii_host = host.lower().encode("idna").decode("ascii")
+        round_trip_host = ascii_host.encode("ascii").decode("idna")
+        if round_trip_host != unicodedata.normalize("NFC", host).lower():
+            ascii_host = None
     except UnicodeError:
         ascii_host = None
     if ascii_host is None:

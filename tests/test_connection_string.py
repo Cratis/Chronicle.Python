@@ -675,24 +675,28 @@ def test_preserves_percent_encoded_unassigned_or_newly_assigned_format_character
     ("unicode_host", "ascii_host"),
     [
         ("münchen.example", "xn--mnchen-3ya.example"),
+        ("mu\u0308nchen.example", "xn--mnchen-3ya.example"),
         ("例え.テスト", "xn--r8jz45g.xn--zckzah"),
         ("bücher.example", "xn--bcher-kva.example"),
     ],
 )
 @pytest.mark.parametrize("host_form", ["unicode", "punycode"])
+@pytest.mark.parametrize("host_case", ["lower", "upper"])
 @pytest.mark.parametrize("trailing_dot", ["", "."])
 def test_accepts_idn_hosts_and_preserves_the_supplied_representation(
-    unicode_host: str, ascii_host: str, host_form: str, trailing_dot: str
+    unicode_host: str, ascii_host: str, host_form: str, host_case: str, trailing_dot: str
 ) -> None:
     host = (unicode_host if host_form == "unicode" else ascii_host) + trailing_dot
+    if host_case == "upper":
+        host = host.upper()
     options = parse_connection_string(f"chronicle://id:secret@{host}")
 
     assert options.host == host
-    assert options.host.encode("idna").decode("ascii") == ascii_host + trailing_dot
+    assert options.host.encode("idna").decode("ascii").lower() == ascii_host + trailing_dot
     assert str(options) == f"chronicle://id:****@{host}:35000"
 
 
-@pytest.mark.parametrize("host", ["PRIVATE_HOST\ud800.example", "é" * 58 + ".example"])
+@pytest.mark.parametrize("host", ["PRIVATE_HOST\ud800.example", "é" * 58 + ".example", "münchen.xn--"])
 def test_idna_conversion_failures_raise_a_chain_free_host_error(host: str) -> None:
     connection_string = f"chronicle://PRIVATE_CLIENT:PRIVATE_SECRET@{host}"
     with pytest.raises(InvalidHostError) as caught:
@@ -703,6 +707,24 @@ def test_idna_conversion_failures_raise_a_chain_free_host_error(host: str) -> No
         assert "PRIVATE_HOST" not in rendering
         assert "PRIVATE_CLIENT" not in rendering
         assert "PRIVATE_SECRET" not in rendering
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize(
+    "host", ["ｅｘａｍｐｌｅ.com", "１２７．０．０．１", "ex\u034fample.com", "x\u2024y.é", "faß.de"]
+)
+@pytest.mark.parametrize("trailing_dot", ["", "."])
+def test_rejects_idna_mappings_that_change_the_supplied_host(host: str, trailing_dot: str) -> None:
+    connection_string = f"chronicle://PRIVATE_CLIENT:PRIVATE_SECRET@{host}{trailing_dot}"
+    with pytest.raises(InvalidHostError) as caught:
+        parse_connection_string(connection_string)
+
+    assert str(caught.value) == "The host is not a valid internationalised host name"
+    for rendering in (str(caught.value), repr(caught.value), "".join(traceback.format_exception(caught.value))):
+        assert "PRIVATE_CLIENT" not in rendering
+        assert "PRIVATE_SECRET" not in rendering
+        assert host not in rendering
     assert caught.value.__cause__ is None
     assert caught.value.__context__ is None
 
