@@ -43,6 +43,7 @@ DEVELOPMENT_CLIENT_SECRET = "chronicle-dev-secret"  # noqa: S105 - a well-known 
 _SCHEME = "chronicle"
 _REDACTED = "****"
 _HOST_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?")
+_ZONE_ID = re.compile(r"[A-Za-z0-9._~-]+")
 _FORBIDDEN_RAW_CATEGORIES = {"Cc", "Cf", "Zs", "Zl", "Zp"}
 _PORT = re.compile(r"^[0-9]+$")
 _API_KEY = "apikey"
@@ -214,6 +215,9 @@ def _parse_host_and_port(host_and_port: str) -> tuple[str, int]:
             raise InvalidHostError("An IPv6 address must be closed with ']'")
         # RFC 6874 encodes the zone delimiter as %25; also accept the raw delimiter without changing the zone id.
         host = host_and_port[1:closing].replace("%25", "%", 1)
+        _, has_zone, zone = host.partition("%")
+        if has_zone and not _ZONE_ID.fullmatch(zone):
+            raise InvalidHostError("The IPv6 zone id must contain only letters, digits or '._~-'")
         remainder = host_and_port[closing + 1 :]
         if remainder and not remainder.startswith(":"):
             raise InvalidHostError("Unexpected text after the IPv6 address")

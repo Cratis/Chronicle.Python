@@ -621,6 +621,29 @@ def test_normalises_an_ipv6_zone_delimiter(host: str) -> None:
     assert parse_connection_string(str(options).replace("****", "secret")) == options
 
 
+@pytest.mark.parametrize("zone", ["\ud800", "\udfff", "x:y", "é", "x$y", "x;y", "x%y", ""])
+@pytest.mark.parametrize("delimiter", ["%", "%25"])
+def test_rejects_an_invalid_ipv6_zone_with_a_fixed_chain_free_host_error(zone: str, delimiter: str) -> None:
+    connection_string = f"chronicle://PRIVATE_CLIENT:PRIVATE_SECRET@[fe80::1{delimiter}{zone}]"
+    with pytest.raises(InvalidHostError) as caught:
+        parse_connection_string(connection_string)
+
+    assert str(caught.value) == "The IPv6 zone id must contain only letters, digits or '._~-'"
+    for rendering in (str(caught.value), repr(caught.value), "".join(traceback.format_exception(caught.value))):
+        assert "PRIVATE_CLIENT" not in rendering
+        assert "PRIVATE_SECRET" not in rendering
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize("zone", ["eth0", "1", "a._~-Z09"])
+@pytest.mark.parametrize("delimiter", ["%", "%25"])
+def test_accepts_rfc6874_zone_characters(zone: str, delimiter: str) -> None:
+    options = parse_connection_string(f"chronicle://id:secret@[fe80::1{delimiter}{zone}]")
+
+    assert options.host == f"fe80::1%{zone}"
+
+
 def test_an_invalid_ipv6_host_error_does_not_retain_the_input_in_its_chain() -> None:
     secret = "super-secret"
     with pytest.raises(InvalidHostError) as caught:
