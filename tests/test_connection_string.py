@@ -416,3 +416,37 @@ def test_invalid_credential_encoding_error_carries_no_decoder_cause_or_context()
 
     assert caught.value.__cause__ is None
     assert caught.value.__context__ is None
+
+
+def test_a_malformed_url_error_does_not_leak_the_credentials() -> None:
+    import traceback
+
+    secret = "super-secret"
+    with pytest.raises(MalformedConnectionStringError) as caught:
+        parse_connection_string(f"chronicle://id:{secret}@host\uff0fbad")
+
+    formatted = "".join(traceback.format_exception(caught.value))
+    assert secret not in formatted
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize("host", ["kernel.example.com.", "localhost.", "a."])
+def test_accepts_an_absolute_host_name_with_a_trailing_dot(host: str) -> None:
+    assert parse_connection_string(f"chronicle://id:secret@{host}:1234").host == host
+
+
+@pytest.mark.parametrize("host", [".", "a..", ".a", "a.-"])
+def test_rejects_a_malformed_trailing_dot_host(host: str) -> None:
+    with pytest.raises((InvalidHostError, MissingHostError)):
+        parse_connection_string(f"chronicle://id:secret@{host}")
+
+
+@pytest.mark.parametrize("port", ["9" * 4400, "1" * 6, "0" * 4400 + "1" + "0" * 5])
+def test_reports_an_over_long_port_as_an_invalid_port(port: str) -> None:
+    with pytest.raises(InvalidPortError):
+        parse_connection_string(f"chronicle://id:secret@localhost:{port}")
+
+
+def test_accepts_a_port_with_leading_zeros() -> None:
+    assert parse_connection_string("chronicle://id:secret@localhost:00080").port == 80

@@ -41,7 +41,7 @@ DEVELOPMENT_CLIENT_SECRET = "chronicle-dev-secret"  # noqa: S105 - a well-known 
 
 _SCHEME = "chronicle"
 _REDACTED = "****"
-_HOST_NAME = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$")
+_HOST_NAME = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?\.?$")
 _PORT = re.compile(r"^[0-9]+$")
 _API_KEY = "apikey"
 _AUTH = "auth"
@@ -161,10 +161,14 @@ def parse_connection_string(connection_string: str) -> ChronicleConnectionOption
     if not separator or scheme.lower() != _SCHEME:
         raise UnsupportedSchemeError(f"The connection string scheme must be '{_SCHEME}://'")
 
+    # The sanitised error is raised outside the except block so that neither __cause__ nor __context__ keeps the
+    # original exception, whose message and traceback frames can contain the credentials.
     try:
         parts = urlsplit(connection_string)
-    except ValueError as error:
-        raise MalformedConnectionStringError("The connection string is not a valid URL") from error
+    except ValueError:
+        parts = None
+    if parts is None:
+        raise MalformedConnectionStringError("The connection string is not a valid URL") from None
 
     user_info, has_user_info, host_and_port = parts.netloc.rpartition("@")
     host, port = _parse_host_and_port(host_and_port)
@@ -220,6 +224,9 @@ def _parse_port(port_text: str | None) -> int:
     if port_text is None:
         return DEFAULT_PORT
     if not _PORT.match(port_text):
+        raise InvalidPortError("The port must be an integer between 1 and 65535")
+    # Reject over-long values before conversion: int() raises ValueError beyond the interpreter's digit limit.
+    if len(port_text.lstrip("0")) > 5:
         raise InvalidPortError("The port must be an integer between 1 and 65535")
     port = int(port_text)
     if not 1 <= port <= 65535:
