@@ -3,6 +3,7 @@
 
 import dataclasses
 import traceback
+from urllib.parse import quote
 
 import pytest
 
@@ -496,6 +497,55 @@ def test_an_unsupported_query_error_does_not_expose_the_query_name(query_name: s
         assert query_name not in rendering
     assert caught.value.__cause__ is None
     assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize("field", ["client_id", "client_secret"])
+@pytest.mark.parametrize("surrogate", ["\ud800", "\udfff", "%ED%A0%80", "%ED%BF%BF"])
+@pytest.mark.parametrize("percent_escape", ["", "%50"])
+def test_rejects_surrogate_credentials_without_exposing_user_info(
+    field: str, surrogate: str, percent_escape: str
+) -> None:
+    client_id = "PRIVATE_CLIENT"
+    client_secret = "PRIVATE_SECRET"
+    if field == "client_id":
+        client_id += percent_escape + surrogate
+    else:
+        client_secret += percent_escape + surrogate
+    connection_string = f"chronicle://{client_id}:{client_secret}@localhost"
+    with pytest.raises(InvalidCredentialsEncodingError) as caught:
+        parse_connection_string(connection_string)
+
+    assert str(caught.value) == "The credentials are not valid percent-encoded UTF-8"
+    for rendering in (str(caught.value), repr(caught.value), "".join(traceback.format_exception(caught.value))):
+        assert "PRIVATE_CLIENT" not in rendering
+        assert "PRIVATE_SECRET" not in rendering
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize("character", ["\u0080", "\u0085", "\u00a0", "\u2003", "\u2028", "\u200e", "\u2029"])
+@pytest.mark.parametrize("field", ["client_id", "client_secret"])
+def test_rejects_raw_unicode_whitespace_control_and_format_characters(character: str, field: str) -> None:
+    client_id = "id" + (character if field == "client_id" else "")
+    client_secret = "secret" + (character if field == "client_secret" else "")
+    connection_string = f"chronicle://{client_id}:{client_secret}@localhost"
+    with pytest.raises(MalformedConnectionStringError) as caught:
+        parse_connection_string(connection_string)
+
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize("character", ["\u0080", "\u0085", "\u00a0", "\u2003", "\u2028", "\u200e", "\u2029"])
+@pytest.mark.parametrize("field", ["client_id", "client_secret"])
+def test_preserves_percent_encoded_unicode_whitespace_control_and_format_characters(character: str, field: str) -> None:
+    client_id = "id" + (quote(character) if field == "client_id" else "")
+    client_secret = "secret" + (quote(character) if field == "client_secret" else "")
+    options = parse_connection_string(f"chronicle://{client_id}:{client_secret}@localhost")
+
+    assert options.client_id == "id" + (character if field == "client_id" else "")
+    assert options.client_secret == "secret" + (character if field == "client_secret" else "")
+    assert str(options)
 
 
 def test_an_invalid_ipv6_host_error_does_not_retain_the_input_in_its_chain() -> None:

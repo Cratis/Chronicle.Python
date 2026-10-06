@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from urllib.parse import parse_qsl, quote, unquote, urlsplit
 
@@ -42,6 +43,7 @@ DEVELOPMENT_CLIENT_SECRET = "chronicle-dev-secret"  # noqa: S105 - a well-known 
 _SCHEME = "chronicle"
 _REDACTED = "****"
 _HOST_NAME = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?\.?$")
+_FORBIDDEN_RAW_CATEGORIES = {"Cc", "Cf", "Zs", "Zl", "Zp"}
 _PORT = re.compile(r"^[0-9]+$")
 _API_KEY = "apikey"
 _AUTH = "auth"
@@ -78,7 +80,7 @@ class IncompleteCredentialsError(ConnectionStringError):
 
 
 class InvalidCredentialsEncodingError(ConnectionStringError):
-    """The client id or the client secret contains percent-encoding that is not valid UTF-8."""
+    """The client id or the client secret is not valid UTF-8, including lone Unicode surrogates."""
 
 
 class AmbiguousAuthenticationError(ConnectionStringError):
@@ -140,7 +142,7 @@ def parse_connection_string(connection_string: str) -> ChronicleConnectionOption
 
     Raises:
         TypeError: ``connection_string`` is not a ``str``.
-        MalformedConnectionStringError: The string contains whitespace or control characters.
+        MalformedConnectionStringError: The raw string contains Unicode whitespace, control or format characters.
         UnsupportedSchemeError: The scheme is not ``chronicle``.
         MissingHostError: No host is given.
         InvalidHostError: The host is invalid, or more than one host is given.
@@ -149,12 +151,12 @@ def parse_connection_string(connection_string: str) -> ChronicleConnectionOption
         UnsupportedOptionError: A path, fragment, or query parameter is given that is not supported yet, or
             ``skipTlsValidation`` is not ``true`` or ``false``.
         IncompleteCredentialsError: Only one of the client id and the client secret is given, or one is empty.
-        InvalidCredentialsEncodingError: The credentials are not valid percent-encoded UTF-8.
+        InvalidCredentialsEncodingError: The credentials contain invalid UTF-8 or lone Unicode surrogates.
     """
     if not isinstance(connection_string, str):
         raise TypeError("A connection string must be a str")
 
-    if any(ord(character) <= 0x20 or ord(character) == 0x7F for character in connection_string):
+    if any(unicodedata.category(character) in _FORBIDDEN_RAW_CATEGORIES for character in connection_string):
         raise MalformedConnectionStringError("The connection string must not contain whitespace or control characters")
 
     scheme, separator, _ = connection_string.partition("://")
@@ -289,9 +291,14 @@ def _parse_credentials(user_info: str, *, has_user_info: bool) -> tuple[str, str
         raise IncompleteCredentialsError("Encode ':' in the client secret as %3A")
 
     try:
-        return unquote(raw_client_id, errors="strict"), unquote(raw_client_secret, errors="strict")
+        credentials = unquote(raw_client_id, errors="strict"), unquote(raw_client_secret, errors="strict")
     except UnicodeDecodeError:
-        pass
+        credentials = None
+
+    if credentials is not None and not any(
+        0xD800 <= ord(character) <= 0xDFFF for value in credentials for character in value
+    ):
+        return credentials
 
     # Raised outside the handler so neither __cause__ nor __context__ carries the decoder's message, which names the
     # offending byte of the credentials.
