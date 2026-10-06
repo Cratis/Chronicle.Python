@@ -644,6 +644,33 @@ def test_accepts_rfc6874_zone_characters(zone: str, delimiter: str) -> None:
     assert options.host == f"fe80::1%{zone}"
 
 
+@pytest.mark.parametrize("codepoint", [0x0378, 0x0890, 0x0891, *range(0x13439, 0x13440)])
+@pytest.mark.parametrize("field", ["client_id", "client_secret"])
+def test_rejects_raw_unassigned_or_newly_assigned_format_characters(codepoint: int, field: str) -> None:
+    character = chr(codepoint)
+    client_id = "id" + (character if field == "client_id" else "")
+    client_secret = "secret" + (character if field == "client_secret" else "")
+    connection_string = f"chronicle://{client_id}:{client_secret}@localhost"
+    with pytest.raises(MalformedConnectionStringError) as caught:
+        parse_connection_string(connection_string)
+
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize("codepoint", [0x0378, 0x0890, 0x0891, *range(0x13439, 0x13440)])
+@pytest.mark.parametrize("field", ["client_id", "client_secret"])
+def test_preserves_percent_encoded_unassigned_or_newly_assigned_format_characters(codepoint: int, field: str) -> None:
+    character = chr(codepoint)
+    client_id = "id" + (quote(character) if field == "client_id" else "")
+    client_secret = "secret" + (quote(character) if field == "client_secret" else "")
+    options = parse_connection_string(f"chronicle://{client_id}:{client_secret}@localhost")
+
+    assert options.client_id == "id" + (character if field == "client_id" else "")
+    assert options.client_secret == "secret" + (character if field == "client_secret" else "")
+    assert str(options)
+
+
 def test_an_invalid_ipv6_host_error_does_not_retain_the_input_in_its_chain() -> None:
     secret = "super-secret"
     with pytest.raises(InvalidHostError) as caught:

@@ -44,7 +44,7 @@ _SCHEME = "chronicle"
 _REDACTED = "****"
 _HOST_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?")
 _ZONE_ID = re.compile(r"[A-Za-z0-9._~-]+")
-_FORBIDDEN_RAW_CATEGORIES = {"Cc", "Cf", "Zs", "Zl", "Zp"}
+_FORBIDDEN_RAW_CATEGORIES = {"Cc", "Cf", "Cn", "Zs", "Zl", "Zp"}
 _PORT = re.compile(r"^[0-9]+$")
 _API_KEY = "apikey"
 _AUTH = "auth"
@@ -143,7 +143,8 @@ def parse_connection_string(connection_string: str) -> ChronicleConnectionOption
 
     Raises:
         TypeError: ``connection_string`` is not a ``str``.
-        MalformedConnectionStringError: The raw string contains Unicode whitespace, control or format characters.
+        MalformedConnectionStringError: The raw string contains Unicode whitespace, control, format or unassigned
+            characters.
         UnsupportedSchemeError: The scheme is not ``chronicle``.
         MissingHostError: No host is given.
         InvalidHostError: The host or its brackets are invalid, or more than one host is given.
@@ -158,7 +159,9 @@ def parse_connection_string(connection_string: str) -> ChronicleConnectionOption
         raise TypeError("A connection string must be a str")
 
     if any(unicodedata.category(character) in _FORBIDDEN_RAW_CATEGORIES for character in connection_string):
-        raise MalformedConnectionStringError("The connection string must not contain whitespace or control characters")
+        raise MalformedConnectionStringError(
+            "The connection string must not contain whitespace, control, format or unassigned characters"
+        )
 
     scheme, separator, authority_and_suffix = connection_string.partition("://")
     if not separator or scheme.lower() != _SCHEME:
