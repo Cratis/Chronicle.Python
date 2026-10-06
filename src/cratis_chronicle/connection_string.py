@@ -152,7 +152,7 @@ def parse_connection_string(connection_string: str) -> ChronicleConnectionOption
         InvalidCredentialsEncodingError: The credentials are not valid percent-encoded UTF-8.
     """
     if not isinstance(connection_string, str):
-        raise TypeError(f"A connection string must be a str, not {type(connection_string).__name__}")
+        raise TypeError("A connection string must be a str")
 
     if any(ord(character) <= 0x20 or ord(character) == 0x7F for character in connection_string):
         raise MalformedConnectionStringError("The connection string must not contain whitespace or control characters")
@@ -203,8 +203,13 @@ def _parse_host_and_port(host_and_port: str) -> tuple[str, int]:
         port_text = remainder[1:] if remainder else None
         try:
             ipaddress.IPv6Address(host)
-        except ValueError as error:
-            raise InvalidHostError("The bracketed host is not a valid IPv6 address") from error
+        except ValueError:
+            invalid_ipv6 = True
+        else:
+            invalid_ipv6 = False
+        if invalid_ipv6:
+            # Do not retain an exception whose message can include the input host.
+            raise InvalidHostError("The bracketed host is not a valid IPv6 address")
     else:
         if "," in host_and_port:
             raise InvalidHostError("Multiple hosts are not supported")
@@ -267,7 +272,7 @@ def _parse_query(query: str, *, has_credentials: bool) -> bool:
         elif name == _AUTH:
             raise UnsupportedOptionError("The 'auth' option is not supported yet")
         else:
-            raise UnsupportedOptionError(f"The query parameter '{name}' is not supported yet")
+            raise UnsupportedOptionError("The query parameter is not supported yet")
     return skip_tls_validation
 
 

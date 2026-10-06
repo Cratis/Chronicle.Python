@@ -2,6 +2,7 @@
 # Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 import dataclasses
+import traceback
 
 import pytest
 
@@ -22,6 +23,7 @@ from cratis_chronicle import (
     UnsupportedSchemeError,
     parse_connection_string,
 )
+from cratis_chronicle.connection_string import _parse_host_and_port
 
 
 def test_parses_host_port_and_credentials() -> None:
@@ -374,6 +376,17 @@ def test_rejects_a_value_that_is_not_a_string() -> None:
         parse_connection_string(None)  # type: ignore[arg-type]
 
 
+def test_the_type_error_does_not_expose_an_input_derived_type_name() -> None:
+    secret = "super-secret"
+    value = type(secret, (), {})()
+    with pytest.raises(TypeError) as caught:
+        parse_connection_string(value)
+
+    assert str(caught.value) == "A connection string must be a str"
+    assert secret not in repr(caught.value)
+    assert secret not in "".join(traceback.format_exception(caught.value))
+
+
 def test_every_error_is_a_connection_string_error_and_a_value_error() -> None:
     with pytest.raises(ConnectionStringError) as caught:
         parse_connection_string("http://localhost")
@@ -390,14 +403,26 @@ def test_every_error_is_a_connection_string_error_and_a_value_error() -> None:
         "chronicle://id:super-secret-value@localhost?skipTlsValidation=maybe",
         "chronicle://id:super-secret-value@local host",
         "chronicle://id:super%FFsecret-value@localhost",
+        "http://id:super-secret-value@localhost",
+        "chronicle://id:super-secret-value@local!host",
+        "chronicle://id:super-secret-value@[not-an-address]",
+        "chronicle://id:super-secret-value@localhost/super-secret-value",
+        "chronicle://id:super-secret-value@localhost#super-secret-value",
+        "chronicle://id:super-secret-value@localhost?auth=super-secret-value",
+        "chronicle://localhost?apiKey=super-secret-value",
+        "chronicle://:super-secret-value@localhost",
+        "chronicle://id:super-secret-value:extra@localhost",
     ],
 )
 def test_error_messages_never_expose_the_secret(connection_string: str) -> None:
     with pytest.raises(ConnectionStringError) as caught:
         parse_connection_string(connection_string)
 
-    assert "super" not in str(caught.value)
-    assert "secret-value" not in str(caught.value)
+    for rendering in (str(caught.value), repr(caught.value), "".join(traceback.format_exception(caught.value))):
+        assert "super" not in rendering
+        assert "secret-value" not in rendering
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
 
 
 @pytest.mark.parametrize("connection_string", ["chronicle://@localhost:35000", "chronicle://:@localhost:35000"])
@@ -419,8 +444,6 @@ def test_invalid_credential_encoding_error_carries_no_decoder_cause_or_context()
 
 
 def test_a_malformed_url_error_does_not_leak_the_credentials() -> None:
-    import traceback
-
     secret = "super-secret"
     with pytest.raises(MalformedConnectionStringError) as caught:
         parse_connection_string(f"chronicle://id:{secret}@host\uff0fbad")
@@ -459,3 +482,29 @@ def test_reports_a_port_of_thousands_of_zeros_as_an_invalid_port() -> None:
         parse_connection_string(f"chronicle://id:secret@localhost:{port}")
 
     assert str(caught.value) == "The port must be an integer between 1 and 65535"
+
+
+@pytest.mark.parametrize("query_name", ["super-secret@localhost", "super%2Dsecret%40localhost"])
+def test_an_unsupported_query_error_does_not_expose_the_query_name(query_name: str) -> None:
+    secret = "super-secret"
+    with pytest.raises(UnsupportedOptionError) as caught:
+        parse_connection_string(f"chronicle://id:35000?{query_name}")
+
+    assert str(caught.value) == "The query parameter is not supported yet"
+    for rendering in (str(caught.value), repr(caught.value), "".join(traceback.format_exception(caught.value))):
+        assert secret not in rendering
+        assert query_name not in rendering
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_an_invalid_ipv6_host_error_does_not_retain_the_input_in_its_chain() -> None:
+    secret = "super-secret"
+    with pytest.raises(InvalidHostError) as caught:
+        _parse_host_and_port(f"[{secret}]")
+
+    assert str(caught.value) == "The bracketed host is not a valid IPv6 address"
+    assert secret not in repr(caught.value)
+    assert secret not in "".join(traceback.format_exception(caught.value))
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
