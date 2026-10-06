@@ -108,6 +108,7 @@ def test_parses_an_ipv4_host() -> None:
         ("chronicle://id:caf%C3%A9@localhost", "id", "café"),
         ("chronicle://id:a+b@localhost", "id", "a+b"),
         ("chronicle://id:se%3Acret@localhost", "id", "se:cret"),
+        ("chronicle://i%5Bd%5D:se%5Bcret%5D@localhost", "i[d]", "se[cret]"),
     ],
 )
 def test_preserves_percent_encoded_credentials(connection_string: str, client_id: str, client_secret: str) -> None:
@@ -209,7 +210,7 @@ def test_rejects_a_missing_host(connection_string: str) -> None:
     ],
 )
 def test_rejects_an_invalid_host(connection_string: str) -> None:
-    with pytest.raises((InvalidHostError, MalformedConnectionStringError)):
+    with pytest.raises(InvalidHostError):
         parse_connection_string(connection_string)
 
 
@@ -462,7 +463,7 @@ def test_accepts_an_absolute_host_name_with_a_trailing_dot(host: str) -> None:
 
 @pytest.mark.parametrize("host", [".", "a..", ".a", "a.-"])
 def test_rejects_a_malformed_trailing_dot_host(host: str) -> None:
-    with pytest.raises((InvalidHostError, MissingHostError)):
+    with pytest.raises(InvalidHostError):
         parse_connection_string(f"chronicle://id:secret@{host}")
 
 
@@ -546,6 +547,78 @@ def test_preserves_percent_encoded_unicode_whitespace_control_and_format_charact
     assert options.client_id == "id" + (character if field == "client_id" else "")
     assert options.client_secret == "secret" + (character if field == "client_secret" else "")
     assert str(options)
+
+
+@pytest.mark.parametrize(
+    "authority",
+    [
+        "id:secret@[not-an-address]",
+        "id:secret@[]",
+        "id:secret@[::1",
+        "id:secret@::1]",
+        "id:secret@[[::1]]",
+        "id:secret@[::1]]",
+        "id:secret@[::1]x",
+        "id:secret@x[::1]",
+        "id:secret@[::1]:80]",
+        "id:se[cret@localhost",
+        "id:se]cret@localhost",
+        "i[d:secret@localhost",
+        "id:secret@[127.0.0.1]",
+        "id:secret@[::1%]",
+        "id:secret@[::1%25]",
+    ],
+)
+def test_invalid_brackets_raise_a_host_error_before_urlsplit(authority: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    def unexpected_urlsplit(value: str) -> None:
+        pytest.fail("Invalid brackets must be rejected before calling urlsplit")
+
+    monkeypatch.setattr("cratis_chronicle.connection_string.urlsplit", unexpected_urlsplit)
+    connection_string = f"chronicle://{authority}"
+    with pytest.raises(InvalidHostError) as caught:
+        parse_connection_string(connection_string)
+
+    assert "secret" not in str(caught.value)
+    assert "secret" not in repr(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "a..b",
+        "a.-b",
+        "a-.b",
+        "a" * 64,
+        "a" * 64 + ".",
+        ".".join(["a" * 63] * 4),
+        ".".join(["a" * 63] * 3 + ["a" * 62]),
+        ".".join(["a" * 63] * 3 + ["a" * 62]) + ".",
+    ],
+)
+def test_rejects_invalid_dns_label_and_total_lengths(host: str) -> None:
+    with pytest.raises(InvalidHostError):
+        parse_connection_string(f"chronicle://id:secret@{host}")
+
+
+@pytest.mark.parametrize(
+    "host",
+    ["a", "a" * 63, ".".join(["a" * 63] * 3 + ["a" * 61])],
+)
+@pytest.mark.parametrize("trailing_dot", ["", "."])
+def test_accepts_dns_label_and_total_length_limits(host: str, trailing_dot: str) -> None:
+    host += trailing_dot
+    assert parse_connection_string(f"chronicle://id:secret@{host}").host == host
+
+
+@pytest.mark.parametrize("host", ["fe80::1%eth0", "fe80::1%25eth0"])
+def test_normalises_an_ipv6_zone_delimiter(host: str) -> None:
+    options = parse_connection_string(f"chronicle://id:secret@[{host}]:35001")
+
+    assert options.host == "fe80::1%eth0"
+    assert str(options) == "chronicle://id:****@[fe80::1%eth0]:35001"
+    assert parse_connection_string(str(options).replace("****", "secret")) == options
 
 
 def test_an_invalid_ipv6_host_error_does_not_retain_the_input_in_its_chain() -> None:

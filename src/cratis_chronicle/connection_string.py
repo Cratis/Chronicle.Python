@@ -42,7 +42,7 @@ DEVELOPMENT_CLIENT_SECRET = "chronicle-dev-secret"  # noqa: S105 - a well-known 
 
 _SCHEME = "chronicle"
 _REDACTED = "****"
-_HOST_NAME = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?\.?$")
+_HOST_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?")
 _FORBIDDEN_RAW_CATEGORIES = {"Cc", "Cf", "Zs", "Zl", "Zp"}
 _PORT = re.compile(r"^[0-9]+$")
 _API_KEY = "apikey"
@@ -145,7 +145,7 @@ def parse_connection_string(connection_string: str) -> ChronicleConnectionOption
         MalformedConnectionStringError: The raw string contains Unicode whitespace, control or format characters.
         UnsupportedSchemeError: The scheme is not ``chronicle``.
         MissingHostError: No host is given.
-        InvalidHostError: The host is invalid, or more than one host is given.
+        InvalidHostError: The host or its brackets are invalid, or more than one host is given.
         InvalidPortError: The port is not an integer between 1 and 65535.
         AmbiguousAuthenticationError: Credentials are combined with a non-empty ``apiKey``.
         UnsupportedOptionError: A path, fragment, or query parameter is given that is not supported yet, or
@@ -159,9 +159,13 @@ def parse_connection_string(connection_string: str) -> ChronicleConnectionOption
     if any(unicodedata.category(character) in _FORBIDDEN_RAW_CATEGORIES for character in connection_string):
         raise MalformedConnectionStringError("The connection string must not contain whitespace or control characters")
 
-    scheme, separator, _ = connection_string.partition("://")
+    scheme, separator, authority_and_suffix = connection_string.partition("://")
     if not separator or scheme.lower() != _SCHEME:
         raise UnsupportedSchemeError(f"The connection string scheme must be '{_SCHEME}://'")
+
+    # Validate brackets before urlsplit, whose bracket checks vary between supported Python versions.
+    authority = re.split(r"[/?#]", authority_and_suffix, maxsplit=1)[0]
+    _validate_brackets(authority)
 
     # The sanitised error is raised outside the except block so that neither __cause__ nor __context__ keeps the
     # original exception, whose message and traceback frames can contain the credentials.
@@ -193,12 +197,23 @@ def parse_connection_string(connection_string: str) -> ChronicleConnectionOption
     )
 
 
+def _validate_brackets(authority: str) -> None:
+    user_info, _, host_and_port = authority.rpartition("@")
+    if "[" in user_info or "]" in user_info:
+        raise InvalidHostError("Brackets are only supported around an IPv6 host")
+    if "[" in host_and_port or "]" in host_and_port:
+        if not host_and_port.startswith("[") or host_and_port.count("[") != 1 or host_and_port.count("]") != 1:
+            raise InvalidHostError("An IPv6 host must be enclosed in one pair of brackets")
+        _parse_host_and_port(host_and_port)
+
+
 def _parse_host_and_port(host_and_port: str) -> tuple[str, int]:
     if host_and_port.startswith("["):
         closing = host_and_port.find("]")
         if closing == -1:
             raise InvalidHostError("An IPv6 address must be closed with ']'")
-        host = host_and_port[1:closing]
+        # RFC 6874 encodes the zone delimiter as %25; also accept the raw delimiter without changing the zone id.
+        host = host_and_port[1:closing].replace("%25", "%", 1)
         remainder = host_and_port[closing + 1 :]
         if remainder and not remainder.startswith(":"):
             raise InvalidHostError("Unexpected text after the IPv6 address")
@@ -221,7 +236,13 @@ def _parse_host_and_port(host_and_port: str) -> tuple[str, int]:
         port_text = port_text_value if has_port else None
         if not host:
             raise MissingHostError("The connection string does not name a host")
-        if not _HOST_NAME.match(host):
+        host_name = host.removesuffix(".")
+        if len(host_name) > 253:
+            raise InvalidHostError("The host name must not exceed 253 characters")
+        labels = host_name.split(".")
+        if any(not 1 <= len(label) <= 63 for label in labels):
+            raise InvalidHostError("Host name labels must contain between 1 and 63 characters")
+        if any(not _HOST_LABEL.fullmatch(label) for label in labels):
             raise InvalidHostError("The host contains characters that are not valid in a host name")
 
     return host, _parse_port(port_text)
