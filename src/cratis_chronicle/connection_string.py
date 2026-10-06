@@ -225,10 +225,11 @@ def _parse_port(port_text: str | None) -> int:
         return DEFAULT_PORT
     if not _PORT.match(port_text):
         raise InvalidPortError("The port must be an integer between 1 and 65535")
-    # Reject over-long values before conversion: int() raises ValueError beyond the interpreter's digit limit.
-    if len(port_text.lstrip("0")) > 5:
+    # Normalise before checking and converting: int() counts leading zeros towards the interpreter's digit limit.
+    normalised_port = port_text.lstrip("0") or "0"
+    if len(normalised_port) > 5:
         raise InvalidPortError("The port must be an integer between 1 and 65535")
-    port = int(port_text)
+    port = int(normalised_port)
     if not 1 <= port <= 65535:
         raise InvalidPortError("The port must be an integer between 1 and 65535")
     return port

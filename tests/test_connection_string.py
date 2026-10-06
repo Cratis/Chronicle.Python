@@ -448,5 +448,14 @@ def test_reports_an_over_long_port_as_an_invalid_port(port: str) -> None:
         parse_connection_string(f"chronicle://id:secret@localhost:{port}")
 
 
-def test_accepts_a_port_with_leading_zeros() -> None:
-    assert parse_connection_string("chronicle://id:secret@localhost:00080").port == 80
+@pytest.mark.parametrize("port", ["00080", "0" * 4400 + "80"])
+def test_accepts_a_port_with_leading_zeros(port: str) -> None:
+    assert parse_connection_string(f"chronicle://id:secret@localhost:{port}").port == 80
+
+
+def test_reports_a_port_of_thousands_of_zeros_as_an_invalid_port() -> None:
+    port = "0" * 4400
+    with pytest.raises(InvalidPortError) as caught:
+        parse_connection_string(f"chronicle://id:secret@localhost:{port}")
+
+    assert str(caught.value) == "The port must be an integer between 1 and 65535"
