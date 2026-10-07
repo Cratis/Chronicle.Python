@@ -697,7 +697,19 @@ def test_accepts_idn_hosts_and_preserves_the_supplied_representation(
 
 
 @pytest.mark.parametrize(
-    "host", ["PRIVATE_HOST\ud800.example", "é" * 58 + ".example", "münchen.xn--", "münchen.XN--.example"]
+    "host",
+    [
+        "PRIVATE_HOST\ud800.example",
+        "é" * 58 + ".example",
+        "münchen.xn--",
+        "münchen.XN--.example",
+        "münchen.xn--zz",
+        "münchen.xn--mnchen-3ya-",
+        "münchen.xn--zca",
+        "xn--zz.com",
+        "xn--zca.de",
+        "XN--ZZ.COM",
+    ],
 )
 def test_idna_conversion_failures_raise_a_chain_free_host_error(host: str) -> None:
     connection_string = f"chronicle://PRIVATE_CLIENT:PRIVATE_SECRET@{host}"
@@ -753,6 +765,20 @@ def test_rejects_idna_mappings_that_change_the_supplied_host(host: str, trailing
 @pytest.mark.parametrize("host_case", ["supplied", "upper"])
 @pytest.mark.parametrize("trailing_dot", ["", "."])
 def test_accepts_mixed_unicode_and_punycode_labels(host: str, host_case: str, trailing_dot: str) -> None:
+    if host_case == "upper":
+        host = host.upper()
+    host += trailing_dot
+    options = parse_connection_string(f"chronicle://id:secret@{host}")
+
+    assert options.host == host
+    assert str(options) == f"chronicle://id:****@{host}:35000"
+    assert parse_connection_string(str(options).replace("****", "secret")) == options
+
+
+@pytest.mark.parametrize("host", ["xn--mnchen-3ya.de", "xn--r8jz45g.xn--zckzah", "www.xn--bcher-kva.example"])
+@pytest.mark.parametrize("host_case", ["lower", "upper"])
+@pytest.mark.parametrize("trailing_dot", ["", "."])
+def test_accepts_valid_all_ascii_punycode_hosts(host: str, host_case: str, trailing_dot: str) -> None:
     if host_case == "upper":
         host = host.upper()
     host += trailing_dot

@@ -32,7 +32,8 @@ chronicle://[<client-id>:<client-secret>@]<host>[:<port>][/][?skipTlsValidation=
   (`xn--mnchen-3ya.example`, `xn--r8jz45g.xn--zckzah`). The supplied representation is preserved, as in the .NET client.
   Unicode and punycode labels may be mixed, for example `münchen.xn--mnchen-3ya`. Each label containing non-ASCII
   characters must round-trip through IDNA unchanged after NFC normalisation and lowercasing; uppercase forms are
-  accepted. ASCII punycode labels in mixed hosts are decoded for validation without requiring a Unicode spelling.
+  accepted. Every ASCII punycode label with a case-insensitive `xn--` prefix is decoded for validation, including in
+  all-ASCII hosts, without requiring a Unicode spelling. Invalid or non-canonical punycode raises `InvalidHostError`.
   Nameprep mappings that change other characters are rejected, including fullwidth letters or digits, invisible
   joiners, mapped dot characters and `ß` mapped to `ss`.
   Host names are validated using their IDNA-encoded ASCII form: non-empty labels of 1–63 characters, starting and

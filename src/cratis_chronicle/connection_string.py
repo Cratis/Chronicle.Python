@@ -244,7 +244,7 @@ def _parse_host_and_port(host_and_port: str) -> tuple[str, int]:
         if not host:
             raise MissingHostError("The connection string does not name a host")
         host_name = host.removesuffix(".")
-        if not host_name.isascii():
+        if not host_name.isascii() or any(label.lower().startswith("xn--") for label in host_name.split(".")):
             host_name = _encode_idn_host(host_name)
         if len(host_name) > 253:
             raise InvalidHostError("The host name must not exceed 253 characters")
