@@ -9,7 +9,8 @@ installation and first-append guide when the
 | You want to… | Status |
 | --- | --- |
 | `pip install cratis-chronicle` from PyPI | Not possible. No package is published |
-| Connect to Chronicle and append events from Python | Not possible through this package yet. It exposes only `__version__` |
+| Connect to Chronicle and append events from Python | Not possible through this package yet. It exposes `__version__` and a connection-string parser that opens no connection |
+| Parse a `chronicle://` connection string | Supported. See [Connection strings](connection-strings.md) |
 | Build the client from source and run its checks | Supported. See [Development setup](../README.md#development-setup) |
 | Use Chronicle from another language now | Use the [.NET](https://github.com/Cratis/Chronicle), [TypeScript](https://github.com/Cratis/Chronicle.TypeScript), [Kotlin/Java](https://github.com/Cratis/Chronicle.Kotlin), or [Elixir](https://github.com/Cratis/Chronicle.Elixir) client |
 
