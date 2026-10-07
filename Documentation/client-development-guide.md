@@ -22,15 +22,15 @@ Chronicle C# contracts
 ### Temporary contracts distribution
 
 `cratis-chronicle-contracts` is not published to PyPI. The project dependency resolves the verified
-`cratis-chronicle-contracts` 16.38.2 wheel from its matching
-[Chronicle GitHub release](https://github.com/Cratis/Chronicle/releases/tag/v16.38.2), pinned by SHA-256 in
+`cratis-chronicle-contracts` 19.31.3 wheel from its matching
+[Chronicle GitHub release](https://github.com/Cratis/Chronicle/releases/tag/v19.31.3), pinned by SHA-256 in
 `pyproject.toml`. A normal development install fetches it automatically, so the install needs network access to
 GitHub release assets. Do not copy generated contracts into this repository.
 
 The PyPI trusted-publishing setup ([#15](https://github.com/Cratis/Chronicle.Python/issues/15)) and first
 publication ([#16](https://github.com/Cratis/Chronicle.Python/issues/16)) were closed as not planned, so there is
-no scheduled move to PyPI. The contracts wheel is generated from the v16.38.2 kernel; see
-[Kernel version](#kernel-version) before testing against a newer kernel.
+no scheduled move to PyPI. The contracts wheel is generated from the v19.31.3 kernel; see
+[Kernel version](#kernel-version) for the kernels it works with.
 
 ## Local kernel
 
@@ -41,7 +41,7 @@ built-in development client credentials.
 Start the development image that matches the contracts version, bound to the loopback interface only:
 
 ```shell
-docker run --rm -p 127.0.0.1:35000:35000 cratis/chronicle:16.38.2-development
+docker run --rm -p 127.0.0.1:35000:35000 cratis/chronicle:19.31.3-development
 ```
 
 The development image embeds MongoDB inside the container, so every event disappears when the container stops.
@@ -57,10 +57,12 @@ configuration contract.
 
 ### Kernel version
 
-The contracts and the probe below were exercised against `cratis/chronicle:16.38.2-development`. Newer kernels,
-including `latest-development`, may add or change contracts; compatibility between the 16.38.2 contracts and a
-later kernel has not been verified. Name the exact kernel image in any issue, test, or pull request that exercises
-network behavior.
+The contracts, the probe below and the integration tests were exercised against
+`cratis/chronicle:19.31.3-development`. The client calls the 19.x contract names (`EventTypes.RegisterEventTypes`,
+`EventSequences.Append` in the `Sequences` package), so kernels from before that rename, such as 16.38.2, are not
+supported: registering an event type against them fails with `UNIMPLEMENTED`. Kernels newer than 19.31.3, including
+`latest-development`, may add or change contracts and have not been verified. Name the exact kernel image in any
+issue, test, or pull request that exercises network behavior.
 
 ## Authentication contract
 
@@ -85,7 +87,8 @@ call as metadata:
 authorization: Bearer <access token>
 ```
 
-Token acquisition, caching, expiry, refresh, and call interception should remain separate from the channel. Do
+Token acquisition, caching, expiry, refresh, and call interception are separate from the channel
+(`token_provider.py`, `channel.py`). Do
 not permanently bake one expiring token into channel headers. Chronicle's
 [authentication and bearer tokens](https://www.cratis.io/chronicle/building-a-client/authentication-and-bearer-tokens/)
 page describes the behavior the other clients implement: the three authentication modes selected by the connection
@@ -100,10 +103,9 @@ validation.
 
 Chronicle's .NET client differs: it accepts any server certificate unless validation is turned on; see
 [TLS configuration](https://www.cratis.io/chronicle/configuration/tls/). This guide does not adopt that default.
-How the Python client exposes local-development relaxation (an explicit option, a `skipTlsValidation`
-connection-string parameter, or both) is a public API decision for
-[connection-string parsing](https://github.com/Cratis/Chronicle.Python/issues/2). Do not decide it implicitly in
-an implementation, and do not make relaxed validation the behavior for non-local connections. The connection-string grammar, including `skipTlsValidation`, `apiKey`, and `auth=none`, is in
+The Python client reads that decision from the connection string: `skipTlsValidation` is honored only for
+loopback hosts, where it trusts the certificate the kernel presents, and is ignored for every other host; see
+[Authentication and TLS](authentication-and-tls.md). The connection-string grammar, including `skipTlsValidation`, `apiKey`, and `auth=none`, is in
 [connection string elements](https://www.cratis.io/chronicle/building-a-client/connection-string-elements/).
 
 ### Check the kernel before writing client code
@@ -170,7 +172,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-Run it from the activated development environment. Against `cratis/chronicle:16.38.2-development` it prints:
+Run it from the activated development environment. Against `cratis/chronicle:19.31.3-development` it prints:
 
 ```text
 without token: UNAUTHENTICATED
@@ -179,7 +181,28 @@ with token: CommandResult
 
 The probe creates an event store named `python-probe` in the development kernel. Stopping the container removes it.
 
-## First executable milestone
+## Verify against a real kernel
+
+The unit tests run an in-process fake kernel. The opt-in integration tests need a development kernel you start
+yourself. Use a private port so they cannot collide with other kernels:
+
+```shell
+docker run -d --name chronicle-python-it -p 127.0.0.1:19300:35000 cratis/chronicle:19.31.3-development
+# wait until the log says "ready and listening on port 35000"
+CHRONICLE_INTEGRATION_URL=chronicle://localhost:19300 pytest tests/test_integration.py --no-cov
+docker rm -f chronicle-python-it
+```
+
+The tests authenticate over TLS, ensure an event store and the `Default` namespace, register an event type, append
+two events and assert consecutive sequence numbers. They also assert that wrong credentials fail with
+`TokenAuthorizationError` without leaking the secret, and that `skipTlsValidation=false` rejects the self-signed
+certificate. Without `CHRONICLE_INTEGRATION_URL` they are skipped. The kernel also keeps its data in the container,
+so removing it cleans up.
+
+The client targets the 19.x contract names. Against a 16.x kernel, ensuring an event store and a namespace works,
+but event type registration returns `UNIMPLEMENTED`.
+
+## First executable milestone (implemented)
 
 Implement and verify this order before expanding the API:
 
@@ -238,7 +261,7 @@ uncertainty against the core contracts and kernel behavior.
 
 | Symptom | Likely cause and fix |
 | --- | --- |
-| `pip install -e ".[dev]"` fails while downloading `cratis_chronicle_contracts-16.38.2-py3-none-any.whl` | The install cannot reach GitHub release assets. Allow `github.com` and `release-assets.githubusercontent.com`, where the download redirects, through your proxy or firewall |
+| `pip install -e ".[dev]"` fails while downloading `cratis_chronicle_contracts-19.31.3-py3-none-any.whl` | The install cannot reach GitHub release assets. Allow `github.com` and `release-assets.githubusercontent.com`, where the download redirects, through your proxy or firewall |
 | `pip` reports that hashes do not match | The downloaded wheel differs from the pinned SHA-256. Do not remove the hash; report it in an issue |
 | `docker run` fails with `port is already allocated` | Another Chronicle kernel or process uses port 35000. Stop it, or publish a different host port (`-p 127.0.0.1:35100:35000`) and use that port in the connection string, the `curl` URL, and the probe's `PORT` |
 | `ssl.SSLEOFError` or a refused connection right after `docker run` | The kernel is still starting. Wait until the token check succeeds, then retry |
@@ -247,8 +270,8 @@ uncertainty against the core contracts and kernel behavior.
 
 ## Next steps
 
-- Pick up [async OAuth token handling](https://github.com/Cratis/Chronicle.Python/issues/3); connection-string
-  parsing is described in [Connection strings](connection-strings.md).
+- Read [Getting started](getting-started.md), [Authentication and TLS](authentication-and-tls.md) and
+  [Connection strings](connection-strings.md).
 - Read Chronicle's [Building a Chronicle client](https://www.cratis.io/chronicle/building-a-client/) guide for
   the cross-client contract.
 - Follow [CONTRIBUTING.md](../CONTRIBUTING.md) for the required checks before opening a pull request.

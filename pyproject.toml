@@ -36,8 +36,9 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "grpcio>=1.83.0,<2",
     # Temporary release asset until PyPI trusted publishing is configured.
-    "cratis-chronicle-contracts @ https://github.com/Cratis/Chronicle/releases/download/v16.38.2/cratis_chronicle_contracts-16.38.2-py3-none-any.whl#sha256=357052da8a62653dcfa40c8051c4af2c6a6d29295cb6783f59dd5efdf4bdc3f9",
+    "cratis-chronicle-contracts @ https://github.com/Cratis/Chronicle/releases/download/v19.31.3/cratis_chronicle_contracts-19.31.3-py3-none-any.whl#sha256=fcdc4571947f218d59af0ec56ae532032cf3aad2ee504292730735f6cef56fca",
 ]
 
 [project.optional-dependencies]
@@ -71,6 +72,7 @@ packages = ["src/cratis_chronicle"]
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers --cov=cratis_chronicle --cov-report=term-missing"
 testpaths = ["tests"]
+markers = ["integration: needs a real Chronicle development kernel; set CHRONICLE_INTEGRATION_URL"]
 
 [tool.ruff]
 line-length = 120
@@ -83,3 +85,9 @@ select = ["B", "E", "F", "I", "UP"]
 python_version = "3.10"
 strict = true
 packages = ["cratis_chronicle"]
+
+[[tool.mypy.overrides]]
+# The generated contracts ship stubs that mypy cannot parse, and grpcio ships none. Both are used through narrow wrappers.
+module = ["cratis_chronicle_contracts.*", "grpc", "grpc.*"]
+follow_imports = "skip"
+ignore_missing_imports = true

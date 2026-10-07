@@ -11,17 +11,18 @@ contracts. Python joins the existing [.NET](https://github.com/Cratis/Chronicle)
 and [Elixir](https://github.com/Cratis/Chronicle.Elixir) Chronicle clients.
 
 > [!IMPORTANT]
-> The client is in its initial implementation stage. It has no usable client API yet: the `cratis_chronicle`
-> package exposes `__version__` and a connection-string parser that opens no connection. Nothing is published to
-> PyPI, and no compatibility, feature-parity, or support commitment is implied.
+> The client is in its initial implementation stage. The `cratis_chronicle` package can authenticate to a local
+> development kernel, ensure an event store and namespace, register an event type and append an event; nothing else
+> is implemented. Nothing is published to PyPI, and no compatibility, feature-parity, or support commitment is
+> implied.
 
 ## Current status
 
 | Area | Status |
 | --- | --- |
-| Client API (connect, authenticate, append) | Not implemented. Tracked by [the first authenticated append milestone](https://github.com/Cratis/Chronicle.Python/issues/4) |
+| Client API (connect, authenticate, append) | Experimental and minimal: OAuth, event store and namespace, event type registration, append to `event-log`. Verified against the 19.31.3 development kernel. See [Getting started](Documentation/getting-started.md) |
 | `cratis-chronicle` on PyPI | Not published. Install from a source checkout |
-| Generated contracts (`cratis-chronicle-contracts`) | Not on PyPI. Installed automatically from a SHA-256-pinned wheel attached to the [Chronicle v16.38.2 release](https://github.com/Cratis/Chronicle/releases/tag/v16.38.2) |
+| Generated contracts (`cratis-chronicle-contracts`) | Not on PyPI. Installed automatically from a SHA-256-pinned wheel attached to the [Chronicle v19.31.3 release](https://github.com/Cratis/Chronicle/releases/tag/v19.31.3) |
 | Python versions | 3.10 or newer; CI runs 3.10, 3.11, 3.12, 3.13, and 3.14 |
 | Shared Chronicle documentation (language tabs) | Not integrated. Tracked by [Python examples in shared Chronicle documentation](https://github.com/Cratis/Chronicle.Python/issues/5) |
 
@@ -33,7 +34,7 @@ Chronicle kernel.
 
 1. Read [CONTRIBUTING.md](CONTRIBUTING.md).
 2. Follow the [client development guide](Documentation/client-development-guide.md).
-3. Start with [async OAuth token handling](https://github.com/Cratis/Chronicle.Python/issues/3), the next step after connection-string parsing.
+3. Pick a [parity issue](https://github.com/Cratis/Chronicle.Python/issues), such as reading events or observers.
 4. Submit a pull request from a fork or branch.
 
 ## Development setup
