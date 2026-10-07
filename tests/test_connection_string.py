@@ -696,7 +696,9 @@ def test_accepts_idn_hosts_and_preserves_the_supplied_representation(
     assert str(options) == f"chronicle://id:****@{host}:35000"
 
 
-@pytest.mark.parametrize("host", ["PRIVATE_HOST\ud800.example", "é" * 58 + ".example", "münchen.xn--"])
+@pytest.mark.parametrize(
+    "host", ["PRIVATE_HOST\ud800.example", "é" * 58 + ".example", "münchen.xn--", "münchen.XN--.example"]
+)
 def test_idna_conversion_failures_raise_a_chain_free_host_error(host: str) -> None:
     connection_string = f"chronicle://PRIVATE_CLIENT:PRIVATE_SECRET@{host}"
     with pytest.raises(InvalidHostError) as caught:
@@ -712,7 +714,17 @@ def test_idna_conversion_failures_raise_a_chain_free_host_error(host: str) -> No
 
 
 @pytest.mark.parametrize(
-    "host", ["ｅｘａｍｐｌｅ.com", "１２７．０．０．１", "ex\u034fample.com", "x\u2024y.é", "faß.de"]
+    "host",
+    [
+        "ｅｘａｍｐｌｅ.com",
+        "１２７．０．０．１",
+        "ex\u034fample.com",
+        "x\u2024y.é",
+        "faß.de",
+        "xς.example",
+        "ﬁ.example",
+        "ǅ.example",
+    ],
 )
 @pytest.mark.parametrize("trailing_dot", ["", "."])
 def test_rejects_idna_mappings_that_change_the_supplied_host(host: str, trailing_dot: str) -> None:
@@ -727,6 +739,28 @@ def test_rejects_idna_mappings_that_change_the_supplied_host(host: str, trailing
         assert host not in rendering
     assert caught.value.__cause__ is None
     assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "münchen.xn--mnchen-3ya",
+        "例え.xn--zckzah",
+        "bücher.xn--r8jz45g.example",
+        "münchen.XN--MNCHEN-3YA.example",
+    ],
+)
+@pytest.mark.parametrize("host_case", ["supplied", "upper"])
+@pytest.mark.parametrize("trailing_dot", ["", "."])
+def test_accepts_mixed_unicode_and_punycode_labels(host: str, host_case: str, trailing_dot: str) -> None:
+    if host_case == "upper":
+        host = host.upper()
+    host += trailing_dot
+    options = parse_connection_string(f"chronicle://id:secret@{host}")
+
+    assert options.host == host
+    assert str(options) == f"chronicle://id:****@{host}:35000"
+    assert parse_connection_string(str(options).replace("****", "secret")) == options
 
 
 @pytest.mark.parametrize("trailing_dot", ["", "."])

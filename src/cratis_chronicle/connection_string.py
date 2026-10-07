@@ -259,18 +259,21 @@ def _parse_host_and_port(host_and_port: str) -> tuple[str, int]:
 
 def _encode_idn_host(host: str) -> str:
     """Validate Unicode DNS names through IDNA without changing the returned host representation."""
-    ascii_host: str | None
-    try:
-        ascii_host = host.lower().encode("idna").decode("ascii")
-        round_trip_host = ascii_host.encode("ascii").decode("idna")
-        if round_trip_host != unicodedata.normalize("NFC", host).lower():
-            ascii_host = None
-    except UnicodeError:
-        ascii_host = None
-    if ascii_host is None:
-        # The codec exception can contain the input host; do not retain it in cause or context.
-        raise InvalidHostError("The host is not a valid internationalised host name")
-    return ascii_host
+    ascii_labels = []
+    for label in host.split("."):
+        ascii_label: str | None
+        try:
+            ascii_label = label.lower().encode("idna").decode("ascii")
+            round_trip_label = ascii_label.encode("ascii").decode("idna")
+            if not label.isascii() and round_trip_label != unicodedata.normalize("NFC", label).lower():
+                ascii_label = None
+        except UnicodeError:
+            ascii_label = None
+        if ascii_label is None:
+            # The codec exception can contain the input label; do not retain it in cause or context.
+            raise InvalidHostError("The host is not a valid internationalised host name")
+        ascii_labels.append(ascii_label)
+    return ".".join(ascii_labels)
 
 
 def _parse_port(port_text: str | None) -> int:

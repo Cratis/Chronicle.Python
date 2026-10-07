@@ -30,9 +30,11 @@ chronicle://[<client-id>:<client-secret>@]<host>[:<port>][/][?skipTlsValidation=
   preserved. Rejecting unassigned characters also rejects newly assigned format characters on older Python versions.
 - Internationalised host names are accepted as Unicode (`münchen.example`, `例え.テスト`) or ASCII punycode
   (`xn--mnchen-3ya.example`, `xn--r8jz45g.xn--zckzah`). The supplied representation is preserved, as in the .NET client.
-  Unicode host names must round-trip through IDNA unchanged after NFC normalisation and lowercasing; uppercase forms
-  are accepted. Nameprep mappings that change other characters are rejected, including fullwidth letters or digits,
-  invisible joiners, mapped dot characters and `ß` mapped to `ss`.
+  Unicode and punycode labels may be mixed, for example `münchen.xn--mnchen-3ya`. Each label containing non-ASCII
+  characters must round-trip through IDNA unchanged after NFC normalisation and lowercasing; uppercase forms are
+  accepted. ASCII punycode labels in mixed hosts are decoded for validation without requiring a Unicode spelling.
+  Nameprep mappings that change other characters are rejected, including fullwidth letters or digits, invisible
+  joiners, mapped dot characters and `ß` mapped to `ss`.
   Host names are validated using their IDNA-encoded ASCII form: non-empty labels of 1–63 characters, starting and
   ending with a letter or digit, and at most 253 characters in total, ignoring an optional trailing dot, which is
   preserved.
