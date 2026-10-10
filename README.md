@@ -2,6 +2,7 @@
 
 [![Build](https://github.com/Cratis/Chronicle.Python/actions/workflows/build.yml/badge.svg)](https://github.com/Cratis/Chronicle.Python/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Discord](https://img.shields.io/discord/1182595891576717413?label=Discord&logo=discord&color=7289da)](https://discord.gg/kt4AMpV8WV)
 
 This repository is the experimental Python client for [Cratis Chronicle](https://github.com/Cratis/Chronicle),
 the open-source (MIT) event-sourcing database and processing runtime — an event store for building event-sourced
@@ -35,6 +36,8 @@ Chronicle kernel.
 2. Follow the [client development guide](Documentation/client-development-guide.md).
 3. Start with [connection-string parsing](https://github.com/Cratis/Chronicle.Python/issues/2), the current good-first-issue contribution.
 4. Submit a pull request from a fork or branch.
+
+Questions: ask the Cratis team and other developers on the [Cratis Discord](https://discord.gg/kt4AMpV8WV).
 
 ## Development setup
 
