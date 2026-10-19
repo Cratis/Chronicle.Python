@@ -7,6 +7,11 @@ on:
 permissions:
   contents: read
 
+# Releases never cancel each other and queue in order (Cratis/Workflows#162).
+concurrency:
+  group: publish-${{ github.repository }}
+  queue: max
+
 jobs:
   build:
     runs-on: ubuntu-latest
