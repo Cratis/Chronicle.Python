@@ -2,6 +2,8 @@
 name: cratis-engineering-docs-authoring
 description: Draft accurate Cratis product or engineering documentation once the reader's goal, owning source, and product evidence are known. Use for tutorials, how-to guides, explanations, and references; use the owning repository's navigation and visual QA workflows for placement and rendering.
 license: LICENSE
+metadata:
+  cratis-hint-paths: "**/Documentation/**/*.{md,mdx}"
 ---
 <!-- cratis-ai-managed: skills/cratis-engineering-docs-authoring/SKILL.md -->
 
@@ -49,8 +51,7 @@ Use Diátaxis to choose the page's main job. Include brief context needed to mak
 | Explanation | Understand why and when | Concepts, boundaries, trade-offs, diagram |
 | Reference | Look up exact information | Exhaustive tables, fields, commands, signatures |
 
-For the detailed mechanical format, read
-[site-format.md](references/site-format.md).
+Read [site-format.md](references/site-format.md) when drafting a page for the Cratis Astro Starlight site; the owning repository’s stricter format remains authoritative.
 
 ## Drafting workflow
 

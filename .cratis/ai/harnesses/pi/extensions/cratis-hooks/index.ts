@@ -9,16 +9,30 @@
  *
  *   Claude PreToolUse  (Write|Edit)  →  Pi `tool_call`      →  cratis-guard-writes.sh  (exit 2 = block)
  *   Claude PreToolUse  (Bash)        →  Pi `tool_call`      →  cratis-guard-store-mutations.sh  (exit 2 = block)
+ *   Claude PreToolUse  (Bash)        →  Pi `tool_call`      →  cratis-guard-secrets.sh  (exit 2 = block)
+ *   Claude PreToolUse  (Bash)        →  Pi `tool_call`      →  cratis-guard-pr-body.sh  (exit 2 = block)
  *   Claude PostToolUse (Write|Edit)  →  Pi `tool_result`    →  cratis-pattern-scan.sh  (advisory context)
- *   Claude Stop                       →  Pi `agent_settled`  →  cratis-quality-gate.sh  (exit 2 = keep going)
+ *   Claude PostToolUse (Bash)        →  Pi `tool_result`    →  cratis-cleanup-worktrees.sh --hook  (removes delivered worktrees/branches)
+ *   Claude SessionStart              →  Pi `session_start`  →  cratis-cleanup-worktrees.sh --hook  (sweeps orphans left by any earlier session)
+ *   Explicit Pi `cratis_quality_gate` tool → cratis-quality-gate.sh  (exit 2 = failed)
+ *
+ * The quality gate is the one deliberate difference from Claude. It builds and tests the repository, which can
+ * take many minutes, and Pi awaits `agent_settled` handlers while deferring the next prompt — so a gate run there
+ * froze the session between prompts, invisibly and with no way to cancel it. Here the gate is an explicit tool
+ * the model runs in the foreground: it shows progress, Escape cancels it, it stops at a deadline
+ * (CRATIS_HOOKS_GATE_TIMEOUT_SECONDS, default 5 minutes, maximum 10 minutes). A timeout or cancellation
+ * is reported as "not verified", never as a pass. It never runs in the background, where it would race the agent's next edits.
+ * It is not invoked at every prompt boundary: use affected-project checks while iterating, then run the
+ * repository's full CI-equivalent checks before declaring completion or pushing/opening a PR. The explicit tool
+ * selects gates for all current working-tree changes; it is not a substitute for the full CI gate.
  *
  * Nothing here duplicates corpus content: it is adapter machinery, the Pi peer of the Claude
  * `hooks` block in `.claude/settings.json`. Every environment escape hatch the scripts honor
- * (CRATIS_HOOKS_ALLOW_PROTECTED_WRITES, CRATIS_HOOKS_ALLOW_STORE_MUTATIONS, CRATIS_HOOKS_SKIP_SCAN,
+ * (CRATIS_HOOKS_ALLOW_PROTECTED_WRITES, CRATIS_HOOKS_ALLOW_STORE_MUTATIONS, CRATIS_HOOKS_ALLOW_SECRET_READS, CRATIS_HOOKS_SKIP_SCAN,
  * CRATIS_HOOKS_SKIP_GATE, …) still works because the scripts are executed unchanged, in the environment
  * Pi was started from.
  *
- * Only Pi's `bash` tool is bridged to the store-mutation guard. A command the user types directly (`!cmd`,
+ * Only Pi's `bash` tool is bridged to the store-mutation and secrets guards. A command the user types directly (`!cmd`,
  * the `user_bash` event) is the person's own action and is deliberately not guarded.
  */
 
@@ -26,7 +40,27 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+import {
+	gateLogDirectory,
+	gateTimeoutSeconds,
+	latestGateLog,
+	MAX_GATE_TIMEOUT_SECONDS,
+	MIN_GATE_TIMEOUT_SECONDS,
+	parseGatePlan,
+	PLAN_TIMEOUT_MS,
+	FINGERPRINT_TIMEOUT_MS,
+	runBounded,
+	tailLines,
+	workingTreeFingerprint,
+} from "./quality-gate.ts";
+
+export const QUALITY_GATE_TOOL_NAME = "cratis_quality_gate";
+const HEARTBEAT_MS = 10_000;
+const TAIL_LINES = 60;
+// runBounded escalates after 5s and settles within another 2s if a child holds its pipes.
+const SHUTDOWN_CLEANUP_MS = 8_000;
 
 const extensionPath = fileURLToPath(import.meta.url);
 const bundledCorpusRoot = path.resolve(path.dirname(extensionPath), "..", "..", "..", "..");
@@ -50,11 +84,11 @@ interface ScriptRun {
  * writes it exists to refuse. Callers decide what to do with `failed`; this function only reports
  * it honestly.
  */
-function runScript(script: string, stdinJson: string, cwd: string, signal?: AbortSignal): Promise<ScriptRun> {
+function runScript(script: string, stdinJson: string, cwd: string, signal?: AbortSignal, args: string[] = []): Promise<ScriptRun> {
 	return new Promise<ScriptRun>((resolve) => {
 		let proc: ReturnType<typeof spawn>;
 		try {
-			proc = spawn("bash", [script], { cwd, stdio: ["pipe", "pipe", "pipe"] });
+			proc = spawn("bash", [script, ...args], { cwd, stdio: ["pipe", "pipe", "pipe"] });
 		} catch (error) {
 			resolve({ code: 127, stdout: "", stderr: String(error), failed: true });
 			return;
@@ -70,6 +104,13 @@ function runScript(script: string, stdinJson: string, cwd: string, signal?: Abor
 			if (signal.aborted) kill();
 			else signal.addEventListener("abort", kill, { once: true });
 		}
+		// A script that exits before reading stdin (or doesn't read it at all) closes its end of the
+		// pipe first; the write then fails with EPIPE asynchronously, after this try/catch has already
+		// returned. Without a listener here that surfaces as an unhandled 'error' event and crashes the
+		// process, even though the exit code the close handler already captured is the real verdict.
+		proc.stdin?.on("error", () => {
+			/* the child may exit before (or without) reading stdin; its exit code is still the verdict */
+		});
 		try {
 			proc.stdin?.write(stdinJson);
 			proc.stdin?.end();
@@ -122,6 +163,19 @@ async function runBlockingGuard(
 	return undefined;
 }
 
+/** Runs the installed blocking Bash guards in order; the first refusal wins. */
+async function runCommandGuards(
+	guards: Array<[script: string, name: string]>,
+	payload: object,
+	ctx: ToolCallContext,
+): Promise<{ block: true; reason: string } | undefined> {
+	for (const [script, name] of guards.filter(([guard]) => isInstalled(guard))) {
+		const blocked = await runBlockingGuard(script, name, "command", payload, ctx);
+		if (blocked) return blocked;
+	}
+	return undefined;
+}
+
 /**
  * Whether a hook script is installed at all.
  *
@@ -147,14 +201,27 @@ export default function (pi: ExtensionAPI) {
 	const scriptsDir = fs.existsSync(managedScriptsDir) ? managedScriptsDir : path.join(bundledCorpusRoot, "hooks", "scripts");
 	const guardWrites = path.join(scriptsDir, "cratis-guard-writes.sh");
 	const guardStoreMutations = path.join(scriptsDir, "cratis-guard-store-mutations.sh");
+	const guardSecrets = path.join(scriptsDir, "cratis-guard-secrets.sh");
+	const guardPrBody = path.join(scriptsDir, "cratis-guard-pr-body.sh");
 	const patternScan = path.join(scriptsDir, "cratis-pattern-scan.sh");
 	const qualityGate = path.join(scriptsDir, "cratis-quality-gate.sh");
+	const cleanupWorktrees = path.join(scriptsDir, "cratis-cleanup-worktrees.sh");
 
-	// Mirrors Claude's `stop_hook_active`: true only while the model is continuing because the
-	// gate already blocked once this user turn, so the gate never blocks twice in a row (no loop).
-	let gateActive = false;
-	pi.on("input", async (event) => {
-		if (event.source !== "extension") gateActive = false; // a fresh user turn resets the guard
+	// The explicit gate owns its subprocesses; shutdown also cancels a still-running tool.
+	const activeGateRuns = new Map<AbortController, Promise<void>>();
+	pi.on("session_shutdown", async () => {
+		const runs = [...activeGateRuns];
+		for (const [controller] of runs) controller.abort();
+		// Pi exits when shutdown handlers return. Let cancelled runs escalate to SIGKILL first.
+		let timer: NodeJS.Timeout | undefined;
+		try {
+			await Promise.race([
+				Promise.allSettled(runs.map(([, cleanup]) => cleanup)),
+				new Promise<void>((resolve) => { timer = setTimeout(resolve, SHUTDOWN_CLEANUP_MS); }),
+			]);
+		} finally {
+			if (timer) clearTimeout(timer);
+		}
 	});
 
 	// ── PreToolUse → guard writes and store-mutating cratis commands (blocking) ──
@@ -162,20 +229,58 @@ export default function (pi: ExtensionAPI) {
 		if (event.toolName === "bash") {
 			const command = (event as any).input?.command;
 			if (typeof command !== "string" || !command.trim()) return;
-			if (!isInstalled(guardStoreMutations)) return; // no guard installed in this repository - nothing to enforce
 			const payload = { cwd: ctx.cwd, tool_name: "Bash", tool_input: { command } };
-			return runBlockingGuard(guardStoreMutations, "cratis-guard-store-mutations", "command", payload, ctx);
+			const blocked = await runCommandGuards([[guardStoreMutations, "cratis-guard-store-mutations"], [guardSecrets, "cratis-guard-secrets"]], payload, ctx);
+			if (blocked) return blocked;
+			if (isInstalled(guardPrBody)) {
+				const run = await runScript(guardPrBody, JSON.stringify(payload), ctx.cwd, ctx.signal);
+				if (run.failed || run.code !== 0) return { block: true, reason: run.stderr.trim() || "cratis-guard-pr-body could not check this command." };
+				if (run.stderr.trim()) pi.sendMessage({ customType: "cratis-pr-body-warning", content: run.stderr.trim(), display: true });
+			}
+			return;
 		}
 		if (event.toolName !== "write" && event.toolName !== "edit") return;
 		const { filePath, content, newString } = writeTarget(event.toolName, (event as any).input);
 		if (!filePath) return;
 		if (!isInstalled(guardWrites)) return; // no guard installed in this repository - nothing to enforce
 		const payload = { cwd: ctx.cwd, tool_input: { file_path: filePath, content, new_string: newString } };
+		// The shared script resolves the write target's Git origin and allowDependencyManifestWrites setting;
+		// keep manifest defaults and generated/.env protection identical to Claude Code.
 		return runBlockingGuard(guardWrites, "cratis-guard-writes", "write", payload, ctx, "write guards");
 	});
 
+	// ── Cleanup of delivered worktrees and branches ──
+	// The script decides on evidence that the work reached the default branch and only then removes anything; this
+	// bridge just fires it at the same moments Claude does: after a delivering command, and when a session starts.
+	// A failure here must never fail the tool call that already succeeded, so it is reported, not thrown.
+	async function sweepDelivered(hookEvent: "PostToolUse" | "SessionStart", command: string | undefined, cwd: string, signal?: AbortSignal): Promise<string> {
+		if (!isInstalled(cleanupWorktrees)) return "";
+		const payload = JSON.stringify({ hook_event_name: hookEvent, cwd, tool_input: command ? { command } : undefined });
+		const run = await runScript(cleanupWorktrees, payload, cwd, signal, ["--hook"]);
+		if (run.failed) return "cratis-cleanup-worktrees is installed but could not be run, so delivered worktrees were not cleaned up.";
+		try {
+			return JSON.parse(run.stdout)?.hookSpecificOutput?.additionalContext?.trim() ?? run.stderr.trim();
+		} catch {
+			return run.stderr.trim();
+		}
+	}
+	pi.on("session_start", async (_event, ctx) => {
+		const message = await sweepDelivered("SessionStart", undefined, ctx.cwd);
+		if (message) pi.sendMessage({ customType: "cratis-cleanup-worktrees", content: message, display: true });
+	});
+	async function sweepAfterBash(event: any, ctx: ExtensionContext) {
+		if (event.isError) return;
+		const command = event.input?.command;
+		if (typeof command !== "string") return;
+		const message = await sweepDelivered("PostToolUse", command, ctx.cwd, ctx.signal);
+		if (!message) return;
+		const existing = Array.isArray(event.content) ? event.content : [];
+		return { content: [...existing, { type: "text", text: `\n\n[cratis-hooks]\n${message}` }] };
+	}
+
 	// ── PostToolUse → deterministic pattern scan (advisory; injects reminders the model sees) ──
 	pi.on("tool_result", async (event, ctx) => {
+		if (event.toolName === "bash") return sweepAfterBash(event, ctx);
 		if (event.toolName !== "write" && event.toolName !== "edit") return;
 		if (event.isError) return;
 		const { filePath } = writeTarget(event.toolName, (event as any).input);
@@ -215,31 +320,153 @@ export default function (pi: ExtensionAPI) {
 		return { content: [...existing, { type: "text", text: `\n\n[cratis-hooks]\n${reminder.trim()}` }] };
 	});
 
-	// ── Stop → quality gate (re-runs the gates the change touched; keeps the model going on failure) ──
-	pi.on("agent_settled", async (_event, ctx) => {
-		if (ctx.mode === "print" || ctx.mode === "json") return;
-		if (!isInstalled(qualityGate)) return;
-		const payload = JSON.stringify({
-			session_id: ctx.sessionManager.getSessionId?.() ?? "nosession",
-			stop_hook_active: gateActive,
-		});
-		const run = await runScript(qualityGate, payload, ctx.cwd);
+	// The quality gate is only run by its explicit tool, never by a turn-end handler.
+	const sessionIdOf = (ctx: ExtensionContext) => ctx.sessionManager.getSessionId?.() ?? "nosession";
+	const gatePayload = (sessionId: string) => JSON.stringify({ session_id: sessionId, stop_hook_active: false });
 
-		// A gate that cannot run has not passed. Say so rather than letting the turn end quietly,
-		// but only once per user turn, on the same re-entry guard a real gate failure uses.
-		if (run.failed && !gateActive) {
-			gateActive = true;
-			pi.sendUserMessage(
-				`The Cratis quality gate is installed at ${qualityGate} but could not be run, so nothing was verified this turn.` +
-					`${run.stderr.trim() ? `\n\n${run.stderr.trim()}` : ""}`,
-				{ deliverAs: "followUp" },
-			);
-			return;
-		}
-		if (run.code === 2 && !gateActive) {
-			gateActive = true; // don't block again until the next user turn resets it
-			const message = run.stderr.trim() || "A Cratis quality gate failed. Fix it and re-run the gate.";
-			pi.sendUserMessage(message, { deliverAs: "followUp" });
-		}
+	/** The gates the current changes would run, from the script's own dry run. Bounded; never runs a gate. */
+	async function planGates(ctx: ExtensionContext, root: string, signal?: AbortSignal): Promise<{ gates: string[]; problem?: string }> {
+		const run = await runBounded("bash", [qualityGate], {
+			cwd: ctx.cwd,
+			stdin: gatePayload(sessionIdOf(ctx)),
+			timeoutMs: PLAN_TIMEOUT_MS,
+			signal,
+			env: { ...process.env, CLAUDE_PROJECT_DIR: root, CRATIS_HOOKS_GATE_DRYRUN: "1" },
+		});
+		const gates = parseGatePlan(run.stderr);
+		if (run.aborted) return { gates: [], problem: "its dry run was cancelled" };
+		if (run.timedOut) return { gates, problem: `its dry run did not finish within ${PLAN_TIMEOUT_MS / 1000}s` };
+		if (run.failed || run.code !== 0) return { gates, problem: `its dry run could not be completed (exit ${run.code ?? "none"})${run.stderr.trim() ? `\n\n${run.stderr.trim()}` : ""}` };
+		return { gates };
+	}
+
+	// ── The quality gate itself: explicit, foreground, bounded, cancellable ──
+	pi.registerTool({
+		name: QUALITY_GATE_TOOL_NAME,
+		label: "Cratis quality gate",
+		description:
+			"Run the Cratis quality gate (.cratis/ai/hooks/scripts/cratis-quality-gate.sh): the build, spec and lint gates the current " +
+			"working-tree changes touch. Shipped defaults: .cratis/ai/hooks/scripts/quality-gates.json; project overrides: " +
+			".cratis/ai/quality-gates.project.json, shallow-merged by gate id (command without requires drops inherited packageScripts). " +
+			"CRATIS_HOOKS_GATES replaces the defaults; project overrides still merge over it. " +
+			"Runs in the foreground with a whole-tool deadline and optional per-gate timeoutSeconds; can be cancelled. " +
+			"A failure, a timeout or a cancellation is returned as an error and means the change is NOT verified. " +
+			"Run it explicitly at a verification checkpoint, not after every prompt. It selects gates for all current " +
+			"working-tree changes, not the complete CI matrix; run CI-equivalent gates before claiming completion or pushing/opening a PR. " +
+			"Tracked-file stability is Git-visible, not byte-exact: lossy clean/EOL conversion and assume-unchanged/skip-worktree " +
+			"can hide raw disk changes. Verify raw content independently or remove those settings before relying on this check.",
+		promptSnippet: "Run the Cratis quality gate for the current changes (bounded, cancellable)",
+		parameters: Type.Object({
+			timeoutSeconds: Type.Optional(
+				Type.Integer({
+					minimum: MIN_GATE_TIMEOUT_SECONDS,
+					maximum: MAX_GATE_TIMEOUT_SECONDS,
+					description:
+						"Stop the gate after this many seconds (default 300; maximum 600). Raise it only for a concrete reason within the authorized execution budget.",
+				}),
+			),
+		}),
+		executionMode: "sequential",
+
+		async execute(_toolCallId, params, signal, onUpdate, ctx) {
+			if (!isInstalled(qualityGate)) {
+				return { content: [{ type: "text", text: `No Cratis quality gate is installed (${qualityGate}), so nothing was checked.` }], details: { status: "not-installed" } };
+			}
+			if (process.env.CRATIS_HOOKS_SKIP_GATE === "1") {
+				return { content: [{ type: "text", text: "CRATIS_HOOKS_SKIP_GATE=1 is set, so the Cratis quality gate was skipped and nothing was verified." }], details: { status: "skipped" } };
+			}
+			if (process.env.CRATIS_HOOKS_GATE_DRYRUN === "1") {
+				return { content: [{ type: "text", text: "CRATIS_HOOKS_GATE_DRYRUN=1 is set: this is a dry run, NOT VERIFIED. No gates were executed." }], details: { status: "dry-run" } };
+			}
+
+			const timeoutSeconds = gateTimeoutSeconds(params.timeoutSeconds);
+			const sessionId = sessionIdOf(ctx);
+			const started = Date.now();
+			const deadline = started + timeoutSeconds * 1000;
+			const cancel = new AbortController();
+			const expired = new AbortController();
+			const deadlineTimer = setTimeout(() => expired.abort(), timeoutSeconds * 1000);
+			const operationSignal = AbortSignal.any([...(signal ? [signal] : []), cancel.signal, expired.signal]);
+			let completed!: () => void;
+			const cleanup = new Promise<void>((resolve) => { completed = resolve; });
+			activeGateRuns.set(cancel, cleanup);
+			try {
+			const reportTimedOut = () => {
+				const last = latestGateLog(gateLogDirectory(sessionId), started);
+				const tail = last ? tailLines(last.file, TAIL_LINES) : "";
+				throw new Error(`The Cratis quality gate TIMED OUT after ${duration(timeoutSeconds * 1000)}${last ? ` while running '${last.gate}'${last.cwd ? ` (cwd: ${last.cwd})` : ""}` : ""}. This is not a pass: nothing was verified.` +
+					(last ? `\nRun a narrower command instead: ${last.gate === "backend-specs" ? "dotnet test <affected.Specs.csproj-or-Tests.csproj> --configuration Debug --no-build (replace the placeholder; repeat for affected dependents)." : "run the affected project alone using this gate's configured command."}\nConfigure it in .cratis/ai/quality-gates.project.json.\n\nGate log: ${last.file}` : "") +
+					(tail ? `\n\n--- last ${TAIL_LINES} lines ---\n${tail}\n--- end ---` : ""));
+			};
+			const reportInterrupted = () => {
+				if (expired.signal.aborted) reportTimedOut();
+				if (operationSignal.aborted) throw new Error("The Cratis quality gate was cancelled. Nothing was verified.");
+			};
+			const remaining = () => Math.max(1, deadline - Date.now());
+			const logDirectory = gateLogDirectory(sessionId);
+			onUpdate?.({ content: [{ type: "text", text: `Planning Cratis quality gate (${duration(timeoutSeconds * 1000)} deadline). Escape cancels.` }], details: { status: "planning", timeoutSeconds } });
+			reportInterrupted();
+			const before = await workingTreeFingerprint(ctx.cwd, Math.min(FINGERPRINT_TIMEOUT_MS, remaining()), operationSignal);
+			reportInterrupted();
+			if (before.kind === "not-repository") throw new Error("The Cratis quality gate is not in a Git repository; nothing was verified.");
+			if (before.kind === "unknown") throw new Error(`The working tree could not be checked before the Cratis quality gate${before.reason ? `: ${before.reason}` : ""}. Nothing was verified.`);
+			const plan = await planGates(ctx, before.root, operationSignal);
+			reportInterrupted();
+			if (plan.problem) throw new Error(`The Cratis quality gate plan could not be completed: ${plan.problem}. Nothing was verified.`);
+			const planned = plan.gates.length > 0 ? plan.gates.join(", ") : "none planned";
+			const progress = (elapsedMs: number) => {
+				const currentLog = latestGateLog(logDirectory, started);
+				const current = currentLog?.gate;
+				onUpdate?.({
+					content: [
+						{
+							type: "text",
+							text: `Cratis quality gate running${current ? ` ${current}${currentLog?.cwd ? ` (cwd: ${currentLog.cwd})` : ""}` : ""}: ${duration(elapsedMs)} of ${duration(timeoutSeconds * 1000)} (gates: ${planned}). Escape cancels.`,
+						},
+					],
+					details: { status: "running", gates: plan.gates, current, cwd: currentLog?.cwd, elapsedMs, timeoutSeconds },
+				});
+			};
+			progress(Date.now() - started);
+
+			const run = await runBounded("bash", [qualityGate], {
+				cwd: ctx.cwd,
+				stdin: gatePayload(sessionId),
+				timeoutMs: remaining(),
+				signal: operationSignal,
+				env: { ...process.env, CLAUDE_PROJECT_DIR: before.root },
+				onHeartbeat: () => progress(Date.now() - started),
+				heartbeatMs: HEARTBEAT_MS,
+			});
+			// Cancellation never starts another Git process. Only a successful gate needs a post-run fingerprint.
+			if (run.aborted || operationSignal.aborted) reportInterrupted();
+			if (run.timedOut) reportTimedOut();
+			const notes = run.stderr.trim() ? `\n\n${run.stderr.trim()}` : "";
+			if (run.failed) {
+				throw new Error(`The Cratis quality gate is installed at ${qualityGate} but could not be run, so nothing was verified.${notes}`);
+			}
+			if (run.code === 2) throw new Error(run.stderr.trim() || "A Cratis quality gate failed. Fix it and re-run the gate.");
+			if (run.code !== 0) throw new Error(`The Cratis quality gate exited unexpectedly with code ${run.code ?? "none"}; treat the change as not verified.${notes}`);
+			const after = await workingTreeFingerprint(ctx.cwd, Math.min(FINGERPRINT_TIMEOUT_MS, remaining()), operationSignal);
+			reportInterrupted();
+			if (before.kind !== "ok" || after.kind !== "ok" || before.value !== after.value) {
+				throw new Error("The working tree changed while the Cratis quality gate ran (or could not be checked afterward). The gate tested an older tree; this tree is NOT VERIFIED. Re-run after changes settle.");
+			}
+			const summary =
+				plan.gates.length > 0
+					? `The Cratis quality gate passed in ${duration(run.durationMs)} (gates: ${planned}).`
+					: "No Cratis quality gate was planned for the current changes; nothing was verified by this tool.";
+			return { content: [{ type: "text", text: `${summary}${notes}` }], details: { status: plan.gates.length > 0 ? "passed" : "no-applicable-gates", gates: plan.gates, durationMs: run.durationMs } };
+			} finally {
+				clearTimeout(deadlineTimer);
+				activeGateRuns.delete(cancel);
+				completed();
+			}
+		},
 	});
+}
+
+function duration(ms: number): string {
+	const seconds = Math.round(ms / 1000);
+	return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m${String(seconds % 60).padStart(2, "0")}s`;
 }

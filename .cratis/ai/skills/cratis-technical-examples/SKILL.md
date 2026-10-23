@@ -2,6 +2,8 @@
 name: cratis-technical-examples
 description: Design and verify developer-facing code samples, tutorial projects, and documentation snippets against real Cratis APIs. Use when adding or reviewing a runnable example, multi-client snippet, sample app, command/output pair, or migration before/after code. Do not invent API shapes or treat rendering as a compilation check.
 license: MIT
+metadata:
+  cratis-hint-paths: "**/Samples/**/*.{cs,ts,tsx}"
 ---
 <!-- cratis-ai-managed: skills/cratis-technical-examples/SKILL.md -->
 
@@ -32,6 +34,11 @@ language-tab layout or documentation site implementation.
 - **Multi-language client example:** keep one explanation; use the established
   client-owned snippet mechanism, compile each client against its own SDK, and
   offer only implementations that exist. Do not translate a C# call by guess.
+  Use the same domain type names in every tab; if the prose has to explain
+  which name each tab uses, fix the snippets instead. State each backend's id
+  and command-response wire type (for example `Guid` versus `string`) and keep
+  one id type per concept across every page of a series. Shared frontend code
+  that depends on those types must be backend-neutral or tabbed per backend.
 - **Sample application:** one realistic domain, explicit prerequisites and
   package versions, a documented run command, a reproducible state to start
   from, and a visible result. Keep it minimal enough for a new reader to finish.
@@ -69,6 +76,28 @@ language tabs. Never hand-edit a generated proxy or a synchronized docs copy.
 6. Record the source revision and verification scope in the change summary,
    not as a permanent receipt embedded in the page.
 
+## Version constraints belong in the page; the test log does not
+
+A reader needs the versions that change what they install or write. Published
+prose can say that a feature needs a minimum release ("This needs Chronicle
+<version> or later"), pin packages and images in the commands a reader runs, and
+name the one release where behavior changed.
+
+Keep the author's verification record out of the page. Exact SDK builds, image
+digests or commit SHAs recorded for provenance, the date it was run, "tested
+with X on Y", "also checked against a development server", counts of passing
+specifications and a list of which tabs were not run are all a log of what
+the author did. A reader cannot act on them, they are stale by the next
+release, and a page that ends in an audit trail reads as generated, not
+written. Put them in the change summary, the pull request comment or
+`.ai-work/`, per the step above.
+
+Test each version sentence: would a reader install or write something
+different because of it? If not, remove it. A real limitation stays, stated as
+a fact about the product ("the Kotlin client has no equivalent yet"), not as a
+record of what was and was not run. A digest in a command the reader runs is
+part of the command, not a note, and stays.
+
 ## Know what the owning gate actually checks
 
 Look for a snippet validator before designing another checker. Arc and
@@ -83,6 +112,14 @@ required CI gate. These checks **do not** compile ordinary Markdown/MDX fences
 elsewhere in product documentation. For those, verify against real source and
 a runnable sample/spec or an explicit snippet comparison; do not claim
 coverage from a site build or a validator that never scans the page.
+
+A compiling tab is not a working tab. For each backend, confirm that the
+artifact is discovered and registered, that proxy generation emits the file
+and types the page names, and that any runtime behavior the page claims (live
+updates, constraint rejection) was observed against a real kernel and sink. If
+a tab's code compiles but fails at runtime, don't publish it with a workaround
+in the prose after it. Put working code in the tab and reference the tracking
+issue in a code comment.
 
 A simple process beats a large unmaintained examples gallery: give the reader
 one small success first, then link to a fuller sample when they need it. Update
