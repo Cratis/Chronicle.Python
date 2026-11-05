@@ -3,17 +3,17 @@
 [![Build](https://github.com/Cratis/Chronicle.Python/actions/workflows/build.yml/badge.svg)](https://github.com/Cratis/Chronicle.Python/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-This repository is the experimental Python client for [Cratis Chronicle](https://github.com/Cratis/Chronicle),
-the open-source (MIT) event-sourcing database and processing runtime — an event store for building event-sourced
-and CQRS applications. It is being established as an idiomatic, async-first layer over Chronicle's generated gRPC
-contracts. Python joins the existing [.NET](https://github.com/Cratis/Chronicle),
-[TypeScript](https://github.com/Cratis/Chronicle.TypeScript), [Kotlin/Java](https://github.com/Cratis/Chronicle.Kotlin),
-and [Elixir](https://github.com/Cratis/Chronicle.Elixir) Chronicle clients.
+This repository contains the package structure, quality gates, contribution workflow, and client-development
+guide for a Python client for [Cratis Chronicle](https://github.com/Cratis/Chronicle). It is for contributors
+building the client: there is no client API yet, the `cratis_chronicle` package exposes only `__version__`, and
+no package is published to PyPI.
 
-> [!IMPORTANT]
-> The client is in its initial implementation stage. It has no usable client API yet: the `cratis_chronicle`
-> package exposes only `__version__`. Nothing is published to PyPI, and no compatibility, feature-parity, or
-> support commitment is implied.
+Chronicle is the open-source (MIT) event-sourcing database and processing runtime — an event store for building
+event-sourced and CQRS applications. The Python client is intended to provide an idiomatic, async-first layer
+over Chronicle's generated gRPC contracts alongside the existing [.NET](https://github.com/Cratis/Chronicle),
+[TypeScript](https://github.com/Cratis/Chronicle.TypeScript), [Kotlin/Java](https://github.com/Cratis/Chronicle.Kotlin),
+and [Elixir](https://github.com/Cratis/Chronicle.Elixir) clients. No compatibility, feature-parity, or support
+commitment is implied.
 
 ## Current status
 
