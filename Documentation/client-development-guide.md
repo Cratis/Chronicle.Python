@@ -247,8 +247,8 @@ uncertainty against the core contracts and kernel behavior.
 
 ## Next steps
 
-- Pick up [connection-string parsing](https://github.com/Cratis/Chronicle.Python/issues/2), then
-  [async OAuth token handling](https://github.com/Cratis/Chronicle.Python/issues/3).
+- Pick up [async OAuth token handling](https://github.com/Cratis/Chronicle.Python/issues/3); connection-string
+  parsing is described in [Connection strings](connection-strings.md).
 - Read Chronicle's [Building a Chronicle client](https://www.cratis.io/chronicle/building-a-client/) guide for
   the cross-client contract.
 - Follow [CONTRIBUTING.md](../CONTRIBUTING.md) for the required checks before opening a pull request.
