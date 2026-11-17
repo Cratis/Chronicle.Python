@@ -1,15 +1,26 @@
 ---
-applyTo: "**/*"
+applyTo: "**/*.cs,**/*.ts,**/*.tsx,**/*.go,**/*.kt,**/*.kts,**/*.java,**/*.ex,**/*.exs"
+paths:
+  - "**/*.cs"
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.go"
+  - "**/*.kt"
+  - "**/*.kts"
+  - "**/*.java"
+  - "**/*.ex"
+  - "**/*.exs"
 ---
-<!-- cratis-ai-managed: rules/code-quality.md -->
+<!-- cratis-ai-managed: harnesses/copilot/instructions/code-quality.instructions.md -->
+<!-- cratis-ai: generated Copilot instructions. Do not edit; rules/ is the source. -->
 
 # Code Quality
 
 Good code is not just code that works — it is code that can be understood, changed, and extended safely. The principles below are the foundation for writing code that remains maintainable as the system grows. They are not abstract ideals; each one has a concrete, practical consequence for how you write and structure code in this project.
 
 When these principles don't explicitly cover a situation, apply these values to make a judgment call. See the language-specific guides for concrete rules and examples:
-- [Code Quality — C#](./code-quality.csharp.md)
-- [Code Quality — TypeScript](./code-quality.typescript.md)
+- [Code Quality — C#](./code-quality.csharp.instructions.md)
+- [Code Quality — TypeScript](./code-quality.typescript.instructions.md)
 
 ## Composition over Inheritance
 
@@ -18,6 +29,10 @@ Prefer composing behavior from smaller, focused collaborators over building clas
 **Rules:**
 - Never extend a concrete class to add or change behavior — inject a collaborator instead.
 - Inheritance is acceptable only for framework integration points where a base class is part of a well-defined extension mechanism.
+
+## Comments carry no issue or spec references
+
+Code comments never cite issue numbers, PR numbers or spec sections; that context belongs in the commit message and pull request. A comment says why code is non-obvious.
 
 ## Single Responsibility Principle
 

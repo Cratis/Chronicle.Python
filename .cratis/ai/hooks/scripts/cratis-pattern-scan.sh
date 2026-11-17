@@ -19,11 +19,16 @@ set -euo pipefail
 [ "${CRATIS_HOOKS_SKIP_SCAN:-0}" = "1" ] && exit 0
 
 input="$(hook_read_stdin)"
+if ! hook_have jq; then
+    # Only a session key is needed to de-duplicate this advisory when JSON parsing is unavailable.
+    session="$(sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' <<<"$input")"
+    if state_dir="$(hook_state_dir "${session:-nosession}")"; then
+        hook_claim_once "$state_dir/pattern-scan-missing-jq.seen" missing-jq || exit 0
+    fi
+    printf 'cratis-pattern-scan: jq is not installed; pattern scanning is off until jq is installed.\n' >&2
+    exit 0
+fi
 [ -n "$input" ] || exit 0
-
-# jq is the repository's established JSON dependency. If it is not
-# installed the hook degrades to a silent no-op rather than breaking the session.
-hook_have jq || exit 0
 
 root="$(hook_repo_root)"
 cwd="$(hook_json "$input" '.cwd')"
@@ -189,7 +194,7 @@ EOF
 
 context="Cratis rule check on the file you just edited (deterministic pattern pass, not a build):
 ${findings}
-These are framework contracts from .cratis/ai/rules/general.md. Fix them now rather than at the quality gate."
+Framework-contract reminders come from .cratis/ai/rules/general.md: fix them now rather than at the quality gate. Reminders explicitly marked advisory require review only; they are not gate failures."
 
 jq -n --arg ctx "$context" '{
     systemMessage: "cratis-hooks: rule reminder appended to context",

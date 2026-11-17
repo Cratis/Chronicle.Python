@@ -3,7 +3,8 @@ applyTo: "**/*.java"
 paths:
   - "**/*.java"
 ---
-<!-- cratis-ai-managed: rules/java.md -->
+<!-- cratis-ai-managed: harnesses/copilot/instructions/java.instructions.md -->
+<!-- cratis-ai: generated Copilot instructions. Do not edit; rules/ is the source. -->
 
 # Java Conventions
 
@@ -36,13 +37,15 @@ here.
 
 All identifiers, Javadoc, and string literals use **American English**
 spelling (initialize, serialize, behavior, color, organization, center,
-modeling, dialog, license, judgment, gray). See [general.md](./general.md).
+modeling, dialog, license, judgment, gray). See [general.md](../../../rules/general.md).
 
 ## Naming
 
 - PascalCase for class and interface names.
 - camelCase for methods, fields, and local variables.
-- No `I` prefix on interfaces — name the interface for what it does.
+- New application and Arc-style interfaces have no `I` prefix — name them
+  for what they do. Chronicle.Kotlin's published interfaces retain their names
+  (`IEventStore`, `IChronicleClient`, `IProjectionFor`, `IReactorMiddleware`).
 - Never suffix a class with `Impl`, `Manager`, or `Helper` purely to
   disambiguate — name it for its role; reserve `Default<Name>` for the
   concrete counterpart of an interface meant to be overridden.
@@ -128,7 +131,8 @@ modeling, dialog, license, judgment, gray). See [general.md](./general.md).
 
 ## Testing
 
-- JUnit 5 is the house test runner.
+- JUnit Jupiter is the house test runner (the Cratis JVM repositories use
+  Jupiter 6.1.x).
 - A test for a Java-facing surface belongs beside the Java production code
   (`src/test/java/.../<Thing>Test.java`) and must actually compile and run
   against that surface — a Kotlin-only test does not prove Java call-site
