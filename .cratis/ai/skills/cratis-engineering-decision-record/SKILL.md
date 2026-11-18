@@ -1,6 +1,6 @@
 ---
 name: cratis-engineering-decision-record
-description: Consult, author, accept, and supersede decision records in a Cratis repository's decisions/ folder. Use before an architectural, contract, scope, or cross-cutting change, when a ruling has been made that later work must obey, or when an accepted decision has to be replaced. Defer product documentation, session handovers, and work-item status to their own workflows.
+description: Use before a significant architectural, contract or cross-cutting change, or when recording or replacing a durable decision. Not for routine implementation approvals, product docs, session handovers or issue status.
 license: LICENSE
 ---
 <!-- cratis-ai-managed: skills/cratis-engineering-decision-record/SKILL.md -->
@@ -9,7 +9,7 @@ license: LICENSE
 
 A decision is a durable choice with a **decider** and a **date**. It is
 documentation, not a work record: it lives in the repository's `decisions/`
-folder and is reviewed like any other documentation. A handover may summarize a
+folder (or the folder `.cratis/ai.json` sets as `process.decisions.path`) and is reviewed like any other documentation. A handover may summarize a
 decision; it never holds the only copy.
 
 This skill owns the *procedure* — how to consult, author, accept, and supersede
@@ -53,7 +53,7 @@ into an approval ceremony merely because this skill is available.
 ## Steps
 
 1. **List the records in force for the paths you are changing.** Read
-   `decisions/`, keep the records whose `applies-to` matches a path you are
+   `decisions/` (or the configured folder), keep the records whose `applies-to` matches a path you are
    about to touch and whose `status` is `accepted`, and order them newest first.
    Report the count — "0 records matched" and "3 matched, none contradicted" are
    different verdicts and must read differently.
@@ -98,15 +98,20 @@ into an approval ceremony merely because this skill is available.
     text in place — that text is what people relied on. Correct a typo or add
     context under a dated banner that says what changed and why. Change the
     *choice* only with a new record.
-11. **Point both ways and sweep the citations.** The new record names the one it
-    replaces in `supersedes`; the replaced record's `status` becomes
-    `superseded` and it gains a `superseded-by` pointer forward, with its
-    original text preserved. Then find every work item, pull request body, and
-    commit trailer citing the old id and point it at the new one. A reader
-    arriving at either record must be able to reach the other.
+11. **Point both ways; cite the new record only on new work.** The new record
+    names the one it replaces in `supersedes`; the replaced record's `status`
+    becomes `superseded` and it gains a `superseded-by` pointer forward, with
+    its original text preserved. Keep committed trailers and existing issue and
+    pull request text as written: they record which decision governed that work,
+    and updating a committed trailer means rewriting history, which
+    `git-commits` forbids. Cite the new id on new commits and new work. For
+    open work, add a forward link only where the user or an applicable policy
+    authorizes that issue or pull request effect; authority to write a record does
+    not cover it, and never rewrite another author's text. A reader arriving at
+    either record must be able to reach the other and tell which one governed the
+    original implementation.
 
-The exact front-matter fields, the closed value sets, and the index shape are in
-[record-format.md](references/record-format.md).
+Read [record-format.md](references/record-format.md) when authoring or updating a record or regenerating its index; it defines the exact front-matter fields, closed value sets, and index shape.
 
 ## What breaks
 

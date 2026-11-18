@@ -1,7 +1,9 @@
 ---
 name: cratis-technical-examples
-description: Design and verify developer-facing code samples, tutorial projects, and documentation snippets against real Cratis APIs. Use when adding or reviewing a runnable example, multi-client snippet, sample app, command/output pair, or migration before/after code. Do not invent API shapes or treat rendering as a compilation check.
+description: Use when adding or reviewing runnable Cratis examples, tutorial projects, multi-client snippets or command/output pairs. Not for page placement, release notes or treating rendering as compilation proof.
 license: MIT
+metadata:
+  cratis-hint-paths: "**/Samples/**/*.{cs,ts,tsx}"
 ---
 <!-- cratis-ai-managed: skills/cratis-technical-examples/SKILL.md -->
 
@@ -12,6 +14,29 @@ first attempt work, and show how to tell. A substantial tutorial should have a
 real project behind it; a five-line illustration need not become a new sample
 repository. This skill owns the example workflow, not the owning product's
 language-tab layout or documentation site implementation.
+
+## Explain the evidence and the handoff
+
+Make the scope and assumed setup clear for code, commands and configuration;
+shared setup can be established once for a sequence. During verification, ask
+which component owns the effect, which host runs it, how identifiers connect
+steps, and what result, defaults, limitations or recovery the source establishes.
+These are private verification questions, not an inventory to publish after
+every example. Explain a missing or consequential connection where the reader
+needs it, keeping important warnings before the affected action and limits
+beside the behavior they qualify. A plausible block followed by a product-name
+list is not a causal explanation.
+Preserve real package IDs, API names and wire types rather than translating
+them into umbrella branding. Follow the
+[documentation rule](../../rules/documentation.md) for naming and claims.
+
+Keep source checking, compilation, runtime observation and deployed behavior
+separate in the private change note. A source-verified command is not a command
+you ran; expected output is not observed output. For a new or materially changed
+journey, use **cratis-documentation-writing**'s
+[fresh-context reader review](../cratis-documentation-writing/references/reader-review.md).
+That comprehension check cannot replace any example gate, and an unavailable
+reader review must not be claimed as completed.
 
 ## Choose the right source
 
@@ -32,8 +57,21 @@ language-tab layout or documentation site implementation.
 - **Multi-language client example:** keep one explanation; use the established
   client-owned snippet mechanism, compile each client against its own SDK, and
   offer only implementations that exist. Do not translate a C# call by guess.
+  Use the same domain type names in every tab; if the prose has to explain
+  which name each tab uses, fix the snippets instead. State each backend's id
+  and command-response wire type (for example `Guid` versus `string`) and keep
+  one id type per concept across every page of a series. Shared frontend code
+  that depends on those types must be backend-neutral or tabbed per backend.
+  Read the prose before and after every tab group as a claim about each tab:
+  scope a client-specific sentence to its tab, and fix any sentence a tab
+  contradicts. A note inside a tab ("not supported", "no equivalent") is also a
+  claim: check that client's source and show the real shape. Before changing a
+  repeated fact, grep the whole series for it and update every occurrence.
+  Check every snippet against the [concepts rule](../../rules/concepts.md)
+  even when copied from client docs; a primitive for a domain value is a defect
+  there too.
 - **Sample application:** one realistic domain, explicit prerequisites and
-  package versions, a documented run command, a reproducible state to start
+  relevant version constraints, a documented run command, a reproducible state to start
   from, and a visible result. Keep it minimal enough for a new reader to finish.
   Link from the documentation step to the precise sample file, not just the
   repository root. State how to reset sample state safely, what resources the
@@ -69,6 +107,35 @@ language tabs. Never hand-edit a generated proxy or a synchronized docs copy.
 6. Record the source revision and verification scope in the change summary,
    not as a permanent receipt embedded in the page.
 
+## Version constraints belong in the page; the test log does not
+
+Follow the [documentation rule](../../rules/documentation.md): a reader needs
+versions that change what they install or write. State minimum, fixed or
+breaking releases and compatibility or peer ranges that affect the task.
+Ordinary installation follows the supported latest-release path, not universal
+exact-patch pinning; check compatibility rather than assuming every newest
+package works together. Maintained manifests/lockfiles can carry resolved
+versions without repeating them in prose. Pin a deliberately reproducible
+tutorial when needed, and preserve required security/deployment constraints
+and production image policy.
+
+Keep the author's verification record out of the page. Exact SDK builds, image
+digests or commit SHAs recorded for provenance, the date it was run, "tested
+with X on Y", "also checked against a development server", counts of passing
+specifications and a list of which tabs were not run are all a log of what
+the author did. A reader cannot act on them, they are stale by the next
+release, and a page that ends in an audit trail reads as generated, not
+written. Put them in the change summary, the pull request comment or
+`.ai-work/`, per the step above.
+
+Test each version sentence: would a reader install or write something
+different because of it? If not, remove it. A real limitation stays, stated as
+a fact about the product ("the Kotlin client has no equivalent yet"), not as a
+record of what was and was not run. Keep a digest in a runnable command when
+reproducibility, security or deployment requires that artifact; its presence
+inside a command alone is not a reason to retain it. Removing provenance is
+not permission to float a production image or weaken a compatibility boundary.
+
 ## Know what the owning gate actually checks
 
 Look for a snippet validator before designing another checker. Arc and
@@ -82,7 +149,19 @@ every changed client snippet, or name a missing toolchain and rely on its
 required CI gate. These checks **do not** compile ordinary Markdown/MDX fences
 elsewhere in product documentation. For those, verify against real source and
 a runnable sample/spec or an explicit snippet comparison; do not claim
-coverage from a site build or a validator that never scans the page.
+coverage from a site build or a validator that never scans the page. In the
+private change note, map changed ordinary Markdown/MDX fences, commands,
+configuration and output to the source revision and validator or sample that
+actually covers each block. Mark uncovered blocks and unrun checks explicitly;
+source-equal, compiled and runtime-demonstrated are different results.
+
+A compiling tab is not a working tab. For each backend, confirm that the
+artifact is discovered and registered, that proxy generation emits the file
+and types the page names, and that any runtime behavior the page claims (live
+updates, constraint rejection) was observed against a real kernel and sink. If
+a tab's code compiles but fails at runtime, don't publish it with a workaround
+in the prose after it. Put working code in the tab and reference the tracking
+issue in a code comment.
 
 A simple process beats a large unmaintained examples gallery: give the reader
 one small success first, then link to a fuller sample when they need it. Update
