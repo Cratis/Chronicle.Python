@@ -1,8 +1,13 @@
 # Copyright (c) Cratis. All rights reserved.
 # Licensed under the MIT license. See LICENSE file in the project root for full license information.
 """Pins the per-observer observation and projection registration contracts the client falls back to."""
-from cratis_chronicle_contracts import observation_reactors_pb2_grpc, observation_reducers_pb2_grpc, projections_pb2
-from cratis_chronicle_contracts import projections_pb2_grpc
+
+from cratis_chronicle_contracts import (
+    observation_reactors_pb2_grpc,
+    observation_reducers_pb2_grpc,
+    projections_pb2,
+    projections_pb2_grpc,
+)
 
 
 class _RecordingChannel:
