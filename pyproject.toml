@@ -83,3 +83,7 @@ select = ["B", "E", "F", "I", "UP"]
 python_version = "3.10"
 strict = true
 packages = ["cratis_chronicle"]
+
+[[tool.mypy.overrides]]
+module = ["grpc", "grpc.*"]
+ignore_missing_imports = true
