@@ -234,6 +234,18 @@ uncertainty against the core contracts and kernel behavior.
 - Documentation names unsupported behavior and development-only exceptions.
 - No compatibility, parity, support, security, performance, or maturity claim was added without approval.
 
+## Building blocks for observation and registration
+
+These modules need a kernel that serves the multiplexed observation, registration status, and keep-alive status
+contracts (not yet released). They are not yet wired into a connection or client class; that comes with the
+connection work.
+
+| Module | Purpose |
+| --- | --- |
+| `cratis_chronicle.multiplexed_observation` | `MultiplexedObservationChannel` shares one bidirectional call between all reactors and reducers of a connection. `use_multiplexed_observation(capabilities, enabled=True)` decides whether to use it: only when the kernel advertises `multiplexed-observation` and the option is on; otherwise keep one `Reactors.Observe` or `Reducers.Observe` stream per observer |
+| `cratis_chronicle.projection_registration` | `register_projections` sends a registrant (the program name by default), polls `GetRegistrationStatus` until the kernel applied the registration, raises `ProjectionRegistrationNotApplied` on failure, ignores `UNIMPLEMENTED`, and honors a `retry-after` trailer on `UNAVAILABLE` |
+| `cratis_chronicle.kernel_status` | `KernelStatusMonitor` logs when a keep-alive reports the kernel as degraded or recovering, and when it accepts calls normally again |
+
 ## Troubleshooting
 
 | Symptom | Likely cause and fix |
