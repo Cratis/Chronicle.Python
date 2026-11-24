@@ -37,7 +37,7 @@ classifiers = [
 ]
 dependencies = [
     # Temporary release asset until PyPI trusted publishing is configured.
-    "cratis-chronicle-contracts @ https://github.com/Cratis/Chronicle/releases/download/v16.38.2/cratis_chronicle_contracts-16.38.2-py3-none-any.whl#sha256=357052da8a62653dcfa40c8051c4af2c6a6d29295cb6783f59dd5efdf4bdc3f9",
+    "cratis-chronicle-contracts @ https://github.com/Cratis/Chronicle/releases/download/v19.188.0/cratis_chronicle_contracts-19.188.0-py3-none-any.whl#sha256=099c627278e4ad62c945ab8ea1cfd1b8fef200dd566e4da2fa775ed320081b2d",
 ]
 
 [project.optional-dependencies]

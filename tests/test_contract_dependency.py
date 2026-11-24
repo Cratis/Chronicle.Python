@@ -1,8 +1,8 @@
 # Copyright (c) Cratis. All rights reserved.
 # Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-from cratis_chronicle_contracts.events_pb2 import EventType
-from cratis_chronicle_contracts.events_pb2_grpc import EventTypesStub
+from cratis_chronicle_contracts.eventtypes_pb2 import EventType
+from cratis_chronicle_contracts.eventtypes_pb2_grpc import EventTypesStub
 from cratis_chronicle_contracts.protobuf_net.bcl_pb2 import Guid
 
 
